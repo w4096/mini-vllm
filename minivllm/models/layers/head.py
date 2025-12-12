@@ -17,6 +17,8 @@ class LMHead(nn.Module):
 
     def forward(self, x: torch.Tensor):
         context = get_forward_context()
+
+        # at prefill stage, we only need the last token
         if context.prefill:
             last_indices = context.accum_seq_lens_q[1:] - 1
             x = x[last_indices].contiguous()

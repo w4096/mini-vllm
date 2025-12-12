@@ -77,18 +77,17 @@ class KVCacheBlockManager:
             req.blocks.append(block.id)
 
 
-    def allocate_blocks_for_decode(self, req: Request):
+    def append_block_if_needed(self, req: Request):
         """
         In decode stage, we only need to allocate a new block if all the allocated blocks are used.
         """
 
         assert req.state == RequestState.RUNNING
         assert len(req.blocks) > 0
-        assert self.request_need_new_block(req)
-
-        block = self._allocate()
-        assert block.refcount == 1
-        req.blocks.append(block.id)
+        if self.request_need_new_block(req):
+            block = self._allocate()
+            assert block.refcount == 1
+            req.blocks.append(block.id)
 
 
     def deallocate(self, req: Request):
@@ -121,7 +120,7 @@ class KVCacheBlockManager:
         check if the kv cache manager can allocate enough blocks for the request.
         """
         required_blocks = utils.cdiv(len(req.tokens), self.block_size)
-        return len(self.free_block_ids) >= required_blocks
+        return len(self.free_block_ids) >= required_blocks - len(req.blocks)
 
     def request_need_new_block(self, req: Request):
         """
@@ -130,24 +129,17 @@ class KVCacheBlockManager:
         required_blocks = utils.cdiv(len(req.tokens), self.block_size)
         return required_blocks > len(req.blocks)
 
-    # def append_block_if_needed(self, req: Request):
-    #     """
-    #     before decode, append cache block if needed.
-    #     """
-    #     if len(req.tokens) % self.block_size == 1:
-    #         # we need append a new block
-    #         assert req.blocks[-1].hash != -1
-    #         block = self._allocate_free_block()
-    #         req.blocks.append(block)
-    #     elif len(req.tokens) % self.block_size == 0:
-    #         # This means the last block is full. We don't need
-    #         # alloc new block since the kv cache will be saved in
-    #         # the last slot of last block
-    #         assert req.blocks[-1].hash == -1
-    #         tokens = req.tokens[-self.block_size:]
-    #         prefix = req.blocks[-2].hash if len(req.blocks) > 1 else -1
-    #         h = self.compute_hash(tokens, prefix)
-    #         req.blocks[-1].update(h, tokens)
-    #         self.hash_to_block_id[h] = req.blocks[-1].id
-    #     else:
-    #         assert req.blocks[-1].hash == -1
+    def cache_block_if_needed(self, req: Request):
+        """
+        Cache the last block of the request if it is full
+        """
+        if len(req.tokens) % self.block_size == 0:
+            # This means the last block is full. We don't need
+            # alloc new block since the kv cache will be saved in
+            # the last slot of last block
+            assert self.blocks[req.blocks[-1]].hash == -1
+            # tokens = req.tokens[-self.block_size:]
+            # prefix = self.blocks[req.blocks[-2]].hash if len(req.blocks) > 1 else -1
+            # h = KVCacheBlock.compute_hash(tokens, prefix)
+            # self.blocks[req.blocks[-1]].update(h, tokens)
+            # self.hash_to_block_id[h] = req.blocks[-1]

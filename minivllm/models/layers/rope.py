@@ -37,7 +37,7 @@ class RotaryEmbedding(nn.Module):
         sin = freqs.sin()
 
         # [max_position_embeddings, rotary_dim]
-        cache = torch.cat((cos, sin), dim=-1)
+        cache = torch.cat((cos, sin), dim=-1).unsqueeze_(1)
         self.register_buffer("cos_sin_cache", cache, persistent=False)
 
     @torch.compile
@@ -51,7 +51,7 @@ class RotaryEmbedding(nn.Module):
         # key: [num_kv_heads, seq_len, head_dim]
 
         # [positions.shape[0], 1, rotary_dim]
-        cos_sin = self.cos_sin_cache[positions].unsqueeze(0)
+        cos_sin = self.cos_sin_cache[positions]
 
         # [positions.shape[0], 1, rotary_dim / 2]
         cos, sin = cos_sin.chunk(2, dim=-1)

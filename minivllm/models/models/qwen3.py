@@ -6,8 +6,8 @@ from transformers.models.qwen3.configuration_qwen3 import Qwen3Config
 from minivllm.models.layers.norm import RMSNorm
 from minivllm.models.layers.linear import Linear
 from minivllm.models.layers.rope import RotaryEmbedding
-from minivllm.models.layers.embedding import LMHead
-
+from minivllm.models.layers.head import LMHead
+from minivllm.models.layers.attention import FlashAttention
 
 
 class Qwen3Attention(nn.Module):
@@ -30,7 +30,7 @@ class Qwen3Attention(nn.Module):
         self.o_proj = nn.Linear(
             config.num_attention_heads * config.head_dim, config.hidden_size, bias=config.attention_bias
         )
-        self.rotary_emb = RotaryEmbedding.create(
+        self.rotary_embedding = RotaryEmbedding.create(
             config.head_dim,
             rotary_dim=config.head_dim,
             max_position=config.max_position_embeddings,
@@ -38,6 +38,14 @@ class Qwen3Attention(nn.Module):
         )
         self.q_norm = RMSNorm(config.head_dim, eps=config.rms_norm_eps)
         self.k_norm = RMSNorm(config.head_dim, eps=config.rms_norm_eps)
+
+        self.attn = FlashAttention(
+            num_heads=self.config.num_attention_heads,
+            head_dim=self.config.head_dim,
+            scale=self.scaling,
+            num_kv_heads=self.config.num_key_value_heads,
+        )
+        self.use_flash_attn = True
 
     def forward(
             self,
@@ -52,30 +60,39 @@ class Qwen3Attention(nn.Module):
 
         # view: [seq_len, num_heads, head_dim]
         # transpose: [num_heads, seq_len, head_dim]
-        q = q.view(-1, self.config.num_attention_heads, self.config.head_dim).transpose(0, 1)
-        k = k.view(-1, self.config.num_key_value_heads, self.config.head_dim).transpose(0, 1)
-        v = v.view(-1, self.config.num_key_value_heads, self.config.head_dim).transpose(0, 1)
+        q = q.view(-1, self.config.num_attention_heads, self.config.head_dim)
+        k = k.view(-1, self.config.num_key_value_heads, self.config.head_dim)
+        v = v.view(-1, self.config.num_key_value_heads, self.config.head_dim)
 
         q = self.q_norm(q)
         k = self.k_norm(k)
 
-        q, k = self.rotary_emb(positions, q, k)
+        q, k = self.rotary_embedding(positions, q, k)
 
-        group_size = self.config.num_attention_heads // self.config.num_key_value_heads
-        k = k.repeat_interleave(group_size, dim=0)
-        v = v.repeat_interleave(group_size, dim=0)
+        if self.use_flash_attn:
+            o = self.attn(q, k, v)
+        else:
+            q = q.transpose(0, 1)
+            k = k.transpose(0, 1)
+            v = v.transpose(0, 1)
+            group_size = self.config.num_attention_heads // self.config.num_key_value_heads
+            k = k.repeat_interleave(group_size, dim=0)
+            v = v.repeat_interleave(group_size, dim=0)
 
-        # [num_heads, num_heads, seq_len] @ [num_heads, seq_len, head_dim]
-        # scores: [num_heads, seq_len, seq_len]
-        scores = q @ k.transpose(-2, -1)
-        scores = scores.masked_fill(mask, -torch.inf)
-        weights = F.softmax(scores * self.scaling, dim=-1)
+            # [num_heads, num_heads, seq_len] @ [num_heads, seq_len, head_dim]
+            # scores: [num_heads, seq_len, seq_len]
+            scores = q @ k.transpose(-2, -1)
+            scores = scores.masked_fill(mask, -torch.inf)
+            weights = F.softmax(scores * self.scaling, dim=-1)
 
-        # [num_heads, seq_len, head_dim]
-        o = weights @ v
+            # [num_heads, seq_len, head_dim]
+            o = weights @ v
+            
+            # [num_heads, seq_len, head_dim] -> [seq_len, num_heads, head_dim]
+            o = o.transpose(0, 1)
 
-        # [num_heads, seq_len, head_dim] -> [seq_len, num_heads, head_dim] -> [seq_len, hidden_size]
-        o = o.transpose(0, 1).flatten(1, -1)
+        # [seq_len, num_heads, head_dim] -> [seq_len, hidden_size]
+        o = o.flatten(1, -1)
 
         # [seq_len, hidden_size]
         output = self.o_proj(o)

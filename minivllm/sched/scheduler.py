@@ -82,8 +82,7 @@ class Scheduler:
                     break
 
             if req.state == RequestState.RUNNING:
-                if self.block_manager.request_need_new_block(req):
-                    self.block_manager.allocate_blocks_for_decode(req)
+                self.block_manager.append_block_if_needed(req)
                 reqs.append(req)
         self.running.extendleft(reqs)
         return Task(Task.DECODE, reqs)
@@ -116,3 +115,5 @@ class Scheduler:
                 req.state = RequestState.FINISHED
                 self.block_manager.deallocate(req)
                 self.running.remove(req)
+            else:
+                self.block_manager.cache_block_if_needed(req)

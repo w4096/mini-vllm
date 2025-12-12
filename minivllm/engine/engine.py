@@ -13,10 +13,10 @@ from minivllm.kvcache.block_manager import KVCacheBlockManager
 class Engine:
     def __init__(self, config: Config):
         self.config = config
-        self.tokenizer = AutoTokenizer.from_pretrained(config.model.model, use_fast=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(config.model, use_fast=True)
         self.executor = UniProcExecutor(config)
 
-        block_manager = KVCacheBlockManager(config.cache.num_blocks, config.cache.block_size)
+        block_manager = KVCacheBlockManager(config.kvcache_num_blocks, config.kvcache_block_size)
         self.scheduler = Scheduler(SchedulerConfig(
             max_batched_seqs=config.max_num_seqs,
             max_num_batched_tokens=config.max_num_batched_tokens,
