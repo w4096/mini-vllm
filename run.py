@@ -11,10 +11,10 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(path)
 
     prompts = [
-        "Give me a short introduction to large language models.",
         "What is the meaning of life?",
         "What is the difference between GPT and ChatGPT?",
         "How do I get started with LLMs?",
+        "What are some common applications of LLMs?",
     ] * 64
     prompts = [
         tokenizer.apply_chat_template(

@@ -20,7 +20,10 @@ class Request:
         # The block ids that are used to store the KVCache for this request.
         self.blocks: list[int] = []
         self.sampling_params = sampling_params
-        self.cached_token_count = 0
+        
+        # The number of tokens that are cached in the KVCache for this request.
+        # the cached tokens will skip prefilling
+        self.num_cached_tokens = 0
 
     def __getitem__(self, idx) -> int:
         return self.tokens[idx]

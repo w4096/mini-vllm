@@ -48,14 +48,15 @@ class Scheduler:
         :return: None
         """
         reqs = []
-        batched_tokens = 0
+        num_batched_tokens = 0
         while self.waiting and len(reqs) < self.max_batched_seqs:
             req = self.waiting[0]
-            if batched_tokens + len(req.tokens) > self.max_num_batched_tokens:
+            num_prefill_tokens = len(req.tokens) - req.num_cached_tokens
+            if num_batched_tokens + num_prefill_tokens > self.max_num_batched_tokens:
                 break
             if not self.block_manager.can_allocate_new_block(req):
                 break
-            batched_tokens += len(req.tokens)
+            num_batched_tokens += num_prefill_tokens
             self.block_manager.allocate_blocks_for_prefill(req)
             req.state = RequestState.RUNNING
             self.waiting.popleft()

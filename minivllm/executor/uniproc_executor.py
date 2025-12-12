@@ -76,15 +76,19 @@ class UniProcExecutor(Executor):
         max_seq_len_k = 0
 
         for req in task.requests:
-            seq_len = len(req.tokens)
-            tokens.extend(req.tokens)
-            positions.extend(range(seq_len))
-            accum_seq_lens_q.append(accum_seq_lens_q[-1] + seq_len)
-            accum_seq_lens_k.append(accum_seq_lens_k[-1] + seq_len)
-            max_seq_len_q = max(max_seq_len_q, seq_len)
-            max_seq_len_k = max(max_seq_len_k, seq_len)
+            seqlen = len(req.tokens)
+            tokens.extend(req.tokens[req.num_cached_tokens:])
+            positions.extend(range(req.num_cached_tokens, seqlen))
+            
+            seqlen_q = seqlen - req.num_cached_tokens
+            seqlen_k = seqlen
+            accum_seq_lens_q.append(accum_seq_lens_q[-1] + seqlen_q)
+            accum_seq_lens_k.append(accum_seq_lens_k[-1] + seqlen_k)
+            max_seq_len_q = max(max_seq_len_q, seqlen_q)
+            max_seq_len_k = max(max_seq_len_k, seqlen_k)
 
-            for i in range(len(req.blocks)):
+            num_cached_blocks = req.num_cached_tokens // self.config.kvcache_block_size
+            for i in range(num_cached_blocks, len(req.blocks)):
                 start = req.blocks[i] * self.config.kvcache_block_size
                 if i != len(req.blocks) - 1:
                     end = start + self.config.kvcache_block_size
@@ -140,12 +144,7 @@ class UniProcExecutor(Executor):
         return torch.tensor(block_table, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
 
 
-    @torch.inference_mode()
-    def forward(self, ctx: Context, tokens: torch.Tensor) -> torch.Tensor:
-        set_forward_context(ctx)
-        logits = self.model.compute_logits(self.model(tokens, ctx.positions))
-        return logits
-
+    
 
     def sample(self, logits: torch.Tensor, requests: list[Request]) -> list[int]:
         temperatures = []
@@ -155,8 +154,8 @@ class UniProcExecutor(Executor):
         return self.sampler(logits, temperatures).tolist()
 
 
+    @torch.inference_mode()
     def execute(self, task: Task) -> list[int]:
-        # TODO: Add decode support
         if task.type == Task.PREFILL:
             tokens, ctx = self._build_prefill_input(task)
         elif task.type == Task.DECODE:
@@ -164,5 +163,6 @@ class UniProcExecutor(Executor):
         else:
             raise ValueError(f"Unknown task type: {task.type}")
 
-        logits = self.forward(ctx, tokens)
+        set_forward_context(ctx)
+        logits = self.model.compute_logits(self.model(tokens, ctx.positions))
         return self.sample(logits, task.requests)
