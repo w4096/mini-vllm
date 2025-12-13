@@ -12,7 +12,7 @@ class Config:
     gpu_memory_utilization: float = 0.9
     eos: int = -1
 
-    kvcache_num_blocks: int = 1024
+    kvcache_num_blocks: int = 100
     kvcache_block_size: int = 256
 
 

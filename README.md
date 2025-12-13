@@ -2,7 +2,7 @@
 
 A simple vLLM like inference engine.
 
-## Quick Start
+### Quick Start
 
 Download a model from Huggingface. Now, only Qwen3-0.6B is supported for now.
 
@@ -27,7 +27,9 @@ You may need to install `transformers`, `torch`, and `flash-attention`.
 If you have trouble installing `flash-attention`, you can try the prebuilt wheels. See: [mjun0812/flash-attention-prebuild-wheels](https://github.com/mjun0812/flash-attention-prebuild-wheels)
 
 
-## References
+### References
+
+When implementing this project, I referred to the code of following projects:
 
 - [vLLM](https://github.com/vllm-project/vllm)
 - [nano-vllm](https://github.com/GeeeekExplorer/nano-vllm)

@@ -119,6 +119,9 @@ class KVCacheBlockManager:
 
         if bid == -1:
             bid = self.free_block_ids.pop()
+        else:
+            # alloc certain block
+            self.free_block_ids.remove(bid)
         block = self.blocks[bid]
         assert block.refcount == 0
         block.reset()

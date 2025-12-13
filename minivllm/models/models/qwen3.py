@@ -59,7 +59,6 @@ class Qwen3Attention(nn.Module):
         v = self.v_proj(hidden_states)
 
         # view: [seq_len, num_heads, head_dim]
-        # transpose: [num_heads, seq_len, head_dim]
         q = q.view(-1, self.config.num_attention_heads, self.config.head_dim)
         k = k.view(-1, self.config.num_key_value_heads, self.config.head_dim)
         v = v.view(-1, self.config.num_key_value_heads, self.config.head_dim)
@@ -72,6 +71,7 @@ class Qwen3Attention(nn.Module):
         if self.use_flash_attn:
             o = self.attn(q, k, v)
         else:
+            # [num_heads, seq_len, head_dim]
             q = q.transpose(0, 1)
             k = k.transpose(0, 1)
             v = v.transpose(0, 1)

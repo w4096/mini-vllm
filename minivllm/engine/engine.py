@@ -6,7 +6,7 @@ from minivllm.engine.request import Request
 from minivllm.config.config import Config
 from minivllm.config.sampling import SamplingParams
 from minivllm.sched.scheduler import Scheduler, Task, SchedulerConfig
-from minivllm.executor.uniproc_executor import UniProcExecutor
+from minivllm.executor.executor import Executor
 from minivllm.kvcache.block_manager import KVCacheBlockManager
 
 
@@ -14,7 +14,7 @@ class Engine:
     def __init__(self, config: Config):
         self.config = config
         self.tokenizer = AutoTokenizer.from_pretrained(config.model, use_fast=True)
-        self.executor = UniProcExecutor(config)
+        self.executor = Executor(config)
 
         block_manager = KVCacheBlockManager(config.kvcache_num_blocks, config.kvcache_block_size)
         self.scheduler = Scheduler(SchedulerConfig(
@@ -44,7 +44,8 @@ class Engine:
             sampling_params: SamplingParams | list[SamplingParams],
             use_tqdm: bool = True,
     ) -> list[dict]:
-        pbar = tqdm(total=len(prompts), desc="Generating", dynamic_ncols=True)
+        if use_tqdm:
+            pbar = tqdm(total=len(prompts), desc="Generating", dynamic_ncols=True)
         if not isinstance(sampling_params, list):
             sampling_params = [sampling_params] * len(prompts)
         for prompt, sp in zip(prompts, sampling_params):
@@ -66,13 +67,14 @@ class Engine:
                     decode_throughput = processed_token_count / (perf_counter() - t)
 
                 pbar.set_postfix({
-                    "Prefill": f"{int(prefill_throughput)}tok/s",
-                    "Decode": f"{int(decode_throughput)}tok/s",
+                    "Prefill": f"{int(prefill_throughput):<5} tokens/s",
+                    "Decode": f"{int(decode_throughput):<5} tokens/s",
                 })
 
             for req in task.requests:
                 if req.finished:
-                    pbar.update(1)
+                    if use_tqdm:
+                        pbar.update(1)
                     finished_requests.append(req)
 
         finished_requests.sort(key=lambda req: req.id)
