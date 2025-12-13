@@ -4,7 +4,7 @@ import logging
 from minivllm.config.config import Config
 from minivllm.engine.request import Request
 from minivllm.executor.context import Context, set_forward_context
-from minivllm.models import load_model
+from minivllm.models.loader import load_model
 from minivllm.sched.task import Task
 from minivllm.models.layers.sampler import Sampler
 
@@ -21,6 +21,7 @@ class Executor:
 
         self.warmup_model()
 
+        self.kv_cache = None
         self.allocate_kv_cache()
 
         
@@ -33,18 +34,18 @@ class Executor:
         current = torch.cuda.memory_stats()["allocated_bytes.all.current"]
         num_kv_heads = hf_config.num_key_value_heads
         head_dim = getattr(hf_config, "head_dim", hf_config.hidden_size // hf_config.num_attention_heads)
-        block_bytes = 2 * hf_config.num_hidden_layers * config.kvcache_block_size * num_kv_heads * head_dim * hf_config.dtype.itemsize
-        kvcache_num_blocks = int(total * config.gpu_memory_utilization - used - peak + current) // block_bytes
-        assert kvcache_num_blocks > 0
+        block_bytes = 2 * hf_config.num_hidden_layers * config.kv_cache_block_size * num_kv_heads * head_dim * hf_config.dtype.itemsize
+        kv_cache_num_blocks = int(total * config.kv_cache_memory_max_utilization - used - peak + current) // block_bytes
+        assert kv_cache_num_blocks > 0
 
-        kvcache_num_blocks = min(kvcache_num_blocks, config.kvcache_num_blocks)
+        kv_cache_num_blocks = min(kv_cache_num_blocks, config.kv_cache_num_blocks)
 
         # update the config with the new value
-        config.kvcache_num_blocks = kvcache_num_blocks
+        config.kv_cache_num_blocks = kv_cache_num_blocks
         
-        self.kv_cache = torch.empty(2, hf_config.num_hidden_layers, kvcache_num_blocks, config.kvcache_block_size, num_kv_heads, head_dim)
+        self.kv_cache = torch.empty(2, hf_config.num_hidden_layers, kv_cache_num_blocks, config.kv_cache_block_size, num_kv_heads, head_dim)
         
-        logger.info(f'Allocated {kvcache_num_blocks} key-value cache blocks.')
+        logger.info(f'Allocated {kv_cache_num_blocks} key-value cache blocks.')
         
         layer_id = 0
         for module in self.model.modules():
@@ -59,6 +60,8 @@ class Executor:
         
         max_num_batched_tokens, max_model_len = self.config.max_num_batched_tokens, self.config.max_model_len
         num_seqs = min(max_num_batched_tokens // max_model_len, self.config.max_num_seqs)
+
+        # for fast start
         max_model_len = 64
         num_seqs = 10
         reqs = [Request([0] * max_model_len) for _ in range(num_seqs)]
@@ -72,8 +75,8 @@ class Executor:
         tokens = []
         positions = []
         slot_mapping = []
-        accum_seq_lens_q = [0]
-        accum_seq_lens_k = [0]
+        cu_seq_lens_q = [0]
+        cu_seq_lens_k = [0]
         max_seq_len_q = 0
         max_seq_len_k = 0
         block_table = None
@@ -85,28 +88,28 @@ class Executor:
             
             seqlen_q = seqlen - req.num_cached_tokens
             seqlen_k = seqlen
-            accum_seq_lens_q.append(accum_seq_lens_q[-1] + seqlen_q)
-            accum_seq_lens_k.append(accum_seq_lens_k[-1] + seqlen_k)
+            cu_seq_lens_q.append(cu_seq_lens_q[-1] + seqlen_q)
+            cu_seq_lens_k.append(cu_seq_lens_k[-1] + seqlen_k)
             max_seq_len_q = max(max_seq_len_q, seqlen_q)
             max_seq_len_k = max(max_seq_len_k, seqlen_k)
 
-            num_cached_blocks = req.num_cached_tokens // self.config.kvcache_block_size
+            num_cached_blocks = req.num_cached_tokens // self.config.kv_cache_block_size
             for i in range(num_cached_blocks, len(req.blocks)):
-                start = req.blocks[i] * self.config.kvcache_block_size
+                start = req.blocks[i] * self.config.kv_cache_block_size
                 if i != len(req.blocks) - 1:
-                    end = start + self.config.kvcache_block_size
+                    end = start + self.config.kv_cache_block_size
                 else:
-                    last_block_tokens = len(req.tokens) - (len(req.blocks) - 1) * self.config.kvcache_block_size
+                    last_block_tokens = len(req.tokens) - (len(req.blocks) - 1) * self.config.kv_cache_block_size
                     end = start + last_block_tokens
                 slot_mapping.extend(list(range(start, end)))
-        if accum_seq_lens_k[-1] > accum_seq_lens_q[-1]:
+        if cu_seq_lens_k[-1] > cu_seq_lens_q[-1]:
             block_table = self._build_block_table(requests)
         ctx = Context()
         ctx.prefill = True
         tokens = torch.tensor(tokens, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         ctx.positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
-        ctx.accum_seq_lens_q = torch.tensor(accum_seq_lens_q, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
-        ctx.accum_seq_lens_k = torch.tensor(accum_seq_lens_k, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
+        ctx.cu_seq_lens_q = torch.tensor(cu_seq_lens_q, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
+        ctx.cu_seq_lens_k = torch.tensor(cu_seq_lens_k, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         ctx.slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         ctx.max_seq_len_q = max_seq_len_q
         ctx.max_seq_len_k = max_seq_len_k
@@ -125,8 +128,8 @@ class Executor:
             positions.append(len(req.tokens) - 1)
             context_lens.append(len(req.tokens))
 
-            slot_base_index = req.blocks[-1] * self.config.kvcache_block_size
-            last_block_tokens = len(req.tokens) - (len(req.blocks) - 1) * self.config.kvcache_block_size
+            slot_base_index = req.blocks[-1] * self.config.kv_cache_block_size
+            last_block_tokens = len(req.tokens) - (len(req.blocks) - 1) * self.config.kv_cache_block_size
             slot_mapping.append(slot_base_index + last_block_tokens - 1)
 
         tokens = torch.tensor(tokens, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
@@ -147,9 +150,8 @@ class Executor:
             for req in requests
         ]
         return torch.tensor(block_table, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
-    
 
-    def _build_sample_input(self, requests: list[Request]) -> list[int]:
+    def _build_sample_input(self, requests: list[Request]) -> torch.Tensor:
         temperatures = []
         for req in requests:
             temperatures.append(req.sampling_params.temperature)

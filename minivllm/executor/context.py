@@ -6,8 +6,8 @@ import torch
 class Context:
     prefill: bool = False
 
-    accum_seq_lens_q: torch.Tensor | None = None
-    accum_seq_lens_k: torch.Tensor | None = None
+    cu_seq_lens_q: torch.Tensor | None = None
+    cu_seq_lens_k: torch.Tensor | None = None
 
     max_seq_len_q: int = 0
     max_seq_len_k: int = 0

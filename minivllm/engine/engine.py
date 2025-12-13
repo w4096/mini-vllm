@@ -16,7 +16,7 @@ class Engine:
         self.tokenizer = AutoTokenizer.from_pretrained(config.model, use_fast=True)
         self.executor = Executor(config)
 
-        block_manager = KVCacheBlockManager(config.kvcache_num_blocks, config.kvcache_block_size)
+        block_manager = KVCacheBlockManager(config.kv_cache_num_blocks, config.kv_cache_block_size)
         self.scheduler = Scheduler(SchedulerConfig(
             max_batched_seqs=config.max_num_seqs,
             max_num_batched_tokens=config.max_num_batched_tokens,
@@ -53,7 +53,6 @@ class Engine:
 
         finished_requests: list[Request] = []
         prefill_throughput = decode_throughput = 0.
-        i = 0
         while not self.finished:
             t = perf_counter()
             task = self.step()

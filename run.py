@@ -14,21 +14,21 @@ def main():
         "What is the meaning of life?",
         "What is the difference between GPT and ChatGPT?",
         "How do I get started with LLMs?",
-        "What are some common applications of LLMs?",
-    ] * 64
+        "How to build a LLM inference engine from scratch?",
+    ]
     prompts = [
         tokenizer.apply_chat_template(
             [{"role": "user", "content": prompt}],
             tokenize=True,
             add_generation_prompt=True,
-            enable_thinking=True
+            enable_thinking=False
         )
         for prompt in prompts
     ]
 
     config = Config(model=path)
     engine = Engine(config)
-    sampling_params = SamplingParams(temperature=1.0, max_tokens=256)
+    sampling_params = SamplingParams(temperature=1.0, max_tokens=1024)
     outputs = engine.generate(prompts, sampling_params)
 
     for output in outputs[:4]:

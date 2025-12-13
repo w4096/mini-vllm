@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from transformers import AutoConfig, PretrainedConfig
 
-
 @dataclass()
 class Config:
     model: str = "Qwen/Qwen3-0.6B"
@@ -9,12 +8,11 @@ class Config:
     max_num_batched_tokens: int = 16384
     max_num_seqs: int = 512
     max_model_len: int = 4096
-    gpu_memory_utilization: float = 0.9
     eos: int = -1
 
-    kvcache_num_blocks: int = 100
-    kvcache_block_size: int = 256
-
+    kv_cache_num_blocks: int = 100
+    kv_cache_block_size: int = 256
+    kv_cache_memory_max_utilization: float = 0.9
 
     def __post_init__(self):
         assert self.max_num_batched_tokens >= self.max_model_len

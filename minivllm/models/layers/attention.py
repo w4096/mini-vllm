@@ -69,8 +69,8 @@ class FlashAttention(nn.Module):
             if context.block_table is not None:    # prefix cache
                 k, v = k_cache, v_cache
             o = flash_attn_varlen_func(q, k, v,
-                                       max_seqlen_q=context.max_seq_len_q, cu_seqlens_q=context.accum_seq_lens_q,
-                                       max_seqlen_k=context.max_seq_len_k, cu_seqlens_k=context.accum_seq_lens_k,
+                                       max_seqlen_q=context.max_seq_len_q, cu_seqlens_q=context.cu_seq_lens_q,
+                                       max_seqlen_k=context.max_seq_len_k, cu_seqlens_k=context.cu_seq_lens_k,
                                        softmax_scale=self.scale, causal=True, block_table=context.block_table)
         else:    # decode
             o = flash_attn_with_kvcache(q.unsqueeze(1), k_cache, v_cache,

@@ -20,7 +20,7 @@ class LMHead(nn.Module):
 
         # at prefill stage, we only need the last token
         if context.prefill:
-            last_indices = context.accum_seq_lens_q[1:] - 1
+            last_indices = context.cu_seq_lens_q[1:] - 1
             x = x[last_indices].contiguous()
         logits = F.linear(x, self.weight)
         return logits

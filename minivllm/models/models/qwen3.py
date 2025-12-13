@@ -207,9 +207,3 @@ class Qwen3ForCausalLM(nn.Module):
     ) -> torch.Tensor:
         return self.lm_head(hidden_states)
 
-    def load_weights(self, weights: list[tuple[str, torch.Tensor]]):
-        params = dict(self.named_parameters(remove_duplicate=False))
-        for name, weight in weights:
-            assert name in params, f"Parameter {name} not found in model"
-            param = params[name]
-            param.data.copy_(weight)

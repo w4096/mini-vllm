@@ -5,7 +5,6 @@ import xxhash
 import numpy as np
 
 
-
 class KVCacheBlock:
     def __init__(self, bid: int):
         self.id = bid
@@ -37,18 +36,19 @@ class KVCacheBlockManager:
         :param capacity: The number of KVCacheBlocks
         :param block_size: The number of slots in each KVCacheBlock.
 
-        A KVCacheBlock has `block_size` slots, each slot can store a token.
+        A KVCacheBlock is a logical block which represents a physical block of KV cache.
+        It is composed of a list of slots, and each slot can store a token.
+
         +--------+--------+-----+--------+
         | slot 1 | slot 2 | ... | slot n |
         +--------+--------+-----+--------+
         """
 
         self.block_size: int = block_size
-        self.blocks: list[KVCacheBlock] = [KVCacheBlock(i) for i in range(capacity)]
+        self.block_table: list[KVCacheBlock] = [KVCacheBlock(i) for i in range(capacity)]
         self.free_block_ids: deque[int] = deque(range(capacity))
         self.used_block_ids: set[int] = set()
         self.hash_to_block_id: dict[int, int] = {}
-        
 
 
     def allocate_blocks_for_prefill(self, req: Request):
@@ -61,26 +61,26 @@ class KVCacheBlockManager:
         for i in range(required_blocks):
             tokens = req.tokens[i * self.block_size: (i + 1) * self.block_size]
             
-            if len(tokens) != self.block_size:
-                block = self._allocate()
-            else:
+            if len(tokens) == self.block_size:
                 hash_ = KVCacheBlock.compute_hash(tokens, hash_)
-                block_id = self.hash_to_block_id.get(hash_, -1)
-                if block_id == -1 or self.blocks[block_id].tokens != tokens:
+                bid = self.hash_to_block_id.get(hash_, -1)
+                if bid == -1 or self.block_table[bid].tokens != tokens:
                     prefix_cache_miss = True
                 
                 if prefix_cache_miss:
                     block = self._allocate()
                 else:
                     req.num_cached_tokens += self.block_size
-                    if block_id in self.used_block_ids:
-                        block = self.blocks[block_id]
+                    if bid in self.used_block_ids:
+                        block = self.block_table[bid]
                         assert block.refcount >= 1
                         block.refcount += 1
                     else:
-                        block = self._allocate(block_id)
+                        block = self._allocate(bid)
                 block.update(hash_, tokens)
                 self.hash_to_block_id[hash_] = block.id
+            else:
+                block = self._allocate()
 
             req.blocks.append(block.id)
 
@@ -100,7 +100,7 @@ class KVCacheBlockManager:
 
     def deallocate(self, req: Request):
         for bid in reversed(req.blocks):
-            block = self.blocks[bid]
+            block = self.block_table[bid]
             assert block.refcount > 0
             block.refcount -= 1
             if block.refcount == 0:
@@ -122,7 +122,7 @@ class KVCacheBlockManager:
         else:
             # alloc certain block
             self.free_block_ids.remove(bid)
-        block = self.blocks[bid]
+        block = self.block_table[bid]
         assert block.refcount == 0
         block.reset()
         self.used_block_ids.add(bid)
@@ -152,9 +152,9 @@ class KVCacheBlockManager:
             # This means the last block is full. We don't need
             # alloc new block since the kv cache will be saved in
             # the last slot of last block
-            assert self.blocks[req.blocks[-1]].hash == -1
+            assert self.block_table[req.blocks[-1]].hash == -1
             tokens = req.tokens[-self.block_size:]
-            prefix = self.blocks[req.blocks[-2]].hash if len(req.blocks) > 1 else -1
+            prefix = self.block_table[req.blocks[-2]].hash if len(req.blocks) > 1 else -1
             h = KVCacheBlock.compute_hash(tokens, prefix)
-            self.blocks[req.blocks[-1]].update(h, tokens)
+            self.block_table[req.blocks[-1]].update(h, tokens)
             self.hash_to_block_id[h] = req.blocks[-1]
