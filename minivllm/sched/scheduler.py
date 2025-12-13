@@ -10,19 +10,13 @@ from minivllm.sched.task import Task
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class SchedulerConfig:
-    max_batched_seqs: int
-    max_num_batched_tokens: int
-    eos: int
-
 class Scheduler:
-    def __init__(self, config: SchedulerConfig):
+    def __init__(self, config: Config):
         self.max_batched_seqs = config.max_batched_seqs
-        self.max_num_batched_tokens = config.max_num_batched_tokens
+        self.max_batched_tokens = config.max_batched_tokens
         self.eos = config.eos
 
-        self.block_manager: KVCacheBlockManager | None = None
+        self.block_manager = KVCacheBlockManager(config.kv_cache_num_blocks, config.kv_cache_block_size)
         self.waiting: deque[Request] = deque()
         self.running: deque[Request] = deque()
 
@@ -52,7 +46,7 @@ class Scheduler:
         while self.waiting and len(reqs) < self.max_batched_seqs:
             req = self.waiting[0]
             num_prefill_tokens = len(req.tokens) - req.num_cached_tokens
-            if num_batched_tokens + num_prefill_tokens > self.max_num_batched_tokens:
+            if num_batched_tokens + num_prefill_tokens > self.max_batched_tokens:
                 break
             if not self.block_manager.can_allocate_new_block(req):
                 break
@@ -111,7 +105,7 @@ class Scheduler:
             req.append_output_token(token)
 
             eos_reached = token == self.eos
-            max_len_reached = len(req.completion_tokens) == req.sampling_params.max_tokens
+            max_len_reached = len(req.completion_tokens) >= req.sampling_params.max_tokens
             if eos_reached or max_len_reached:
                 req.state = RequestState.FINISHED
                 self.block_manager.deallocate(req)

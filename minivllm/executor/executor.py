@@ -58,13 +58,13 @@ class Executor:
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
         
-        max_num_batched_tokens, max_model_len = self.config.max_num_batched_tokens, self.config.max_model_len
-        num_seqs = min(max_num_batched_tokens // max_model_len, self.config.max_num_seqs)
+        max_batched_tokens, max_model_len = self.config.max_batched_tokens, self.config.max_model_len
+        num_batched_seqs = min(max_batched_tokens // max_model_len, self.config.max_batched_seqs)
 
         # for fast start
         max_model_len = 64
-        num_seqs = 10
-        reqs = [Request([0] * max_model_len) for _ in range(num_seqs)]
+        num_batched_seqs = 10
+        reqs = [Request([0] * max_model_len) for _ in range(num_batched_seqs)]
         
         self.execute(Task(Task.PREFILL, reqs))
         

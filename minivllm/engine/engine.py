@@ -5,9 +5,8 @@ from transformers.models.auto.tokenization_auto import AutoTokenizer
 from minivllm.engine.request import Request
 from minivllm.config.config import Config
 from minivllm.config.sampling import SamplingParams
-from minivllm.sched.scheduler import Scheduler, Task, SchedulerConfig
+from minivllm.sched.scheduler import Scheduler, Task
 from minivllm.executor.executor import Executor
-from minivllm.kvcache.block_manager import KVCacheBlockManager
 
 
 class Engine:
@@ -15,14 +14,8 @@ class Engine:
         self.config = config
         self.tokenizer = AutoTokenizer.from_pretrained(config.model, use_fast=True)
         self.executor = Executor(config)
+        self.scheduler = Scheduler(config)
 
-        block_manager = KVCacheBlockManager(config.kv_cache_num_blocks, config.kv_cache_block_size)
-        self.scheduler = Scheduler(SchedulerConfig(
-            max_batched_seqs=config.max_num_seqs,
-            max_num_batched_tokens=config.max_num_batched_tokens,
-            eos=config.eos,
-        ))
-        self.scheduler.set_block_manager(block_manager)
 
     def submit(self, tokens: list[int], sampling_params: SamplingParams):
         req = Request(tokens, sampling_params)
