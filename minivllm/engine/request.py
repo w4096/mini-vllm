@@ -4,6 +4,7 @@ from typing import List
 from enum import Enum, auto
 from minivllm.config.sampling import SamplingParams
 
+
 class RequestState(Enum):
     WAITING = auto()
     RUNNING = auto()

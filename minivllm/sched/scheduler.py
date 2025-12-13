@@ -1,6 +1,5 @@
 import logging
 from collections import deque
-from dataclasses import dataclass
 
 from minivllm.config.config import Config
 from minivllm.engine.request import Request, RequestState

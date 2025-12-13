@@ -7,6 +7,7 @@ from minivllm.config.config import Config
 from minivllm.config.sampling import SamplingParams
 from minivllm.sched.scheduler import Scheduler, Task
 from minivllm.executor.executor import Executor
+from minivllm.engine.metrics import Metrics
 
 
 class Engine:
@@ -15,16 +16,19 @@ class Engine:
         self.tokenizer = AutoTokenizer.from_pretrained(config.model, use_fast=True)
         self.executor = Executor(config)
         self.scheduler = Scheduler(config)
+        self.metrics = Metrics()
 
 
     def submit(self, tokens: list[int], sampling_params: SamplingParams):
         req = Request(tokens, sampling_params)
         self.scheduler.submit(req)
 
+
     def step(self) -> Task:
         task = self.scheduler.schedule()
         tokens = self.executor.execute(task)
         self.scheduler.update(task, tokens)
+        self.metrics.update(task)
         return task
 
     @property
@@ -37,39 +41,39 @@ class Engine:
             sampling_params: SamplingParams | list[SamplingParams],
             use_tqdm: bool = True,
     ) -> list[dict]:
-        if use_tqdm:
-            pbar = tqdm(total=len(prompts), desc="Generating", dynamic_ncols=True)
         if not isinstance(sampling_params, list):
             sampling_params = [sampling_params] * len(prompts)
+
         for prompt, sp in zip(prompts, sampling_params):
             self.submit(prompt, sp)
 
+        pbar = tqdm(total=len(prompts), desc="Generating", dynamic_ncols=True) if use_tqdm else None
+        stats = self.metrics.stats()
+
         finished_requests: list[Request] = []
-        prefill_throughput = decode_throughput = 0.
         while not self.finished:
-            t = perf_counter()
             task = self.step()
 
-            if use_tqdm:
-                if task.type == Task.PREFILL:
-                    processed_token_count = sum(req.prompt_token_count for req in task.requests)
-                    prefill_throughput = processed_token_count / (perf_counter() - t)
-                else:
-                    processed_token_count = len(task.requests)
-                    decode_throughput = processed_token_count / (perf_counter() - t)
-
+            if pbar:
+                s = self.metrics.stats()
                 pbar.set_postfix({
-                    "Prefill": f"{int(prefill_throughput):<5} tokens/s",
-                    "Decode": f"{int(decode_throughput):<5} tokens/s",
+                    "Prefill(token/s)": f"{s.prefill_throughput:4.0f}",
+                    "Decode(token/s)": f"{s.decode_throughput:4.0f}",
+                    "TTFT": f"{s.time_to_first_token:4.2f}",
+                    "ITL": f"{s.inter_token_latency:4.2f}",
+                    "TPS": f"{s.tokens_per_second:4.2f}",
+                    "RPS": f"{s.requests_per_second:4.2f}",
                 })
+                pbar.update(s.finished_requests - stats.finished_requests)
+                stats = s
 
             for req in task.requests:
                 if req.finished:
-                    if use_tqdm:
-                        pbar.update(1)
                     finished_requests.append(req)
 
+
         finished_requests.sort(key=lambda req: req.id)
+
         outputs = []
         for req in finished_requests:
             outputs.append({
@@ -77,7 +81,8 @@ class Engine:
                 "completion": self.tokenizer.decode(req.completion_tokens),
                 "tokens": req.completion_tokens}
             )
-        if use_tqdm:
+
+        if pbar:
             pbar.close()
 
         return outputs

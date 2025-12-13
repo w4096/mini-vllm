@@ -1,3 +1,4 @@
+import time
 from minivllm.engine.request import Request
 
 class Task:
@@ -7,3 +8,5 @@ class Task:
     def __init__(self, typ: int, reqs: list[Request]):
         self.type = typ
         self.requests = reqs
+
+        self.create_time = time.perf_counter()
