@@ -79,8 +79,8 @@ class Engine:
             outputs.append({
                 "prompt": self.tokenizer.decode(req.prompt_tokens),
                 "completion": self.tokenizer.decode(req.completion_tokens),
-                "tokens": req.completion_tokens}
-            )
+                "tokens": req.completion_tokens,
+            })
 
         if pbar:
             pbar.close()

@@ -19,13 +19,13 @@ class Executor:
         self.model = load_model(config)
         self.sampler = Sampler()
 
-        self.warmup_model()
+        self._warmup_model()
 
         self.kv_cache = None
-        self.allocate_kv_cache()
+        self._init_kv_cache()
 
         
-    def allocate_kv_cache(self):
+    def _init_kv_cache(self):
         config = self.config
         hf_config = self.config.hf_config
         free, total = torch.cuda.mem_get_info()
@@ -35,7 +35,7 @@ class Executor:
         num_kv_heads = hf_config.num_key_value_heads
         head_dim = getattr(hf_config, "head_dim", hf_config.hidden_size // hf_config.num_attention_heads)
         block_bytes = 2 * hf_config.num_hidden_layers * config.kv_cache_block_size * num_kv_heads * head_dim * hf_config.dtype.itemsize
-        kv_cache_num_blocks = int(total * config.kv_cache_memory_max_utilization - used - peak + current) // block_bytes
+        kv_cache_num_blocks = int(total * config.gpu_memory_utilization - used - peak + current) // block_bytes
         assert kv_cache_num_blocks > 0
 
         kv_cache_num_blocks = min(kv_cache_num_blocks, config.kv_cache_num_blocks)
@@ -54,12 +54,12 @@ class Executor:
                 module.v_cache = self.kv_cache[1, layer_id]
                 layer_id += 1
 
-    def warmup_model(self):
+    def _warmup_model(self):
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
         
-        max_batched_tokens, max_model_len = self.config.max_batched_tokens, self.config.max_model_len
-        num_batched_seqs = min(max_batched_tokens // max_model_len, self.config.max_batched_seqs)
+        max_num_batched_tokens, max_model_len = self.config.max_num_batched_tokens, self.config.max_model_len
+        num_batched_seqs = min(max_num_batched_tokens // max_model_len, self.config.max_num_batched_seqs)
 
         # for fast start
         max_model_len = 64
@@ -102,8 +102,10 @@ class Executor:
                     last_block_tokens = len(req.tokens) - (len(req.blocks) - 1) * self.config.kv_cache_block_size
                     end = start + last_block_tokens
                 slot_mapping.extend(list(range(start, end)))
+                
         if cu_seq_lens_k[-1] > cu_seq_lens_q[-1]:
             block_table = self._build_block_table(requests)
+
         ctx = Context()
         ctx.prefill = True
         tokens = torch.tensor(tokens, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)

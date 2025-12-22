@@ -20,10 +20,10 @@ class Config:
     # ================= scheduler config =================
 
     # the max number of tokens in a batch when running prefill and decode
-    max_batched_tokens: int = 16384
+    max_num_batched_tokens: int = 16384
 
     # the max number of sequences in a batch when running prefill and decode
-    max_batched_seqs: int = 512
+    max_num_batched_seqs: int = 512
 
     # the end of sequence token id
     eos: int = -1
@@ -33,11 +33,11 @@ class Config:
 
     # ================= kv cache config =================
     # the number of kv cache blocks
-    kv_cache_num_blocks: int = 100
+    kv_cache_num_blocks: int = 256
     # the size of each kv cache block
     kv_cache_block_size: int = 256
     # the max utilization of the kv cache memory
-    kv_cache_memory_max_utilization: float = 0.9
+    gpu_memory_utilization: float = 0.9
 
 
     def __post_init__(self):

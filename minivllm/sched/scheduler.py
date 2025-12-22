@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 class Scheduler:
     def __init__(self, config: Config):
-        self.max_batched_seqs = config.max_batched_seqs
-        self.max_batched_tokens = config.max_batched_tokens
+        self.max_num_batched_seqs = config.max_num_batched_seqs
+        self.max_num_batched_tokens = config.max_num_batched_tokens
         self.eos = config.eos
 
         self.block_manager = KVCacheBlockManager(config.kv_cache_num_blocks, config.kv_cache_block_size)
@@ -42,10 +42,10 @@ class Scheduler:
         """
         reqs = []
         num_batched_tokens = 0
-        while self.waiting and len(reqs) < self.max_batched_seqs:
+        while self.waiting and len(reqs) < self.max_num_batched_seqs:
             req = self.waiting[0]
             num_prefill_tokens = len(req.tokens) - req.num_cached_tokens
-            if num_batched_tokens + num_prefill_tokens > self.max_batched_tokens:
+            if num_batched_tokens + num_prefill_tokens > self.max_num_batched_tokens:
                 break
             if not self.block_manager.can_allocate_new_block(req):
                 break
@@ -66,7 +66,7 @@ class Scheduler:
         :return: None
         """
         reqs = []
-        while self.running and len(reqs) < self.max_batched_seqs:
+        while self.running and len(reqs) < self.max_num_batched_seqs:
             req = self.running.popleft()
             while not self.block_manager.can_allocate_new_block(req):
                 if self.running:
@@ -78,7 +78,7 @@ class Scheduler:
             if req.state == RequestState.RUNNING:
                 self.block_manager.append_block_if_needed(req)
                 reqs.append(req)
-        self.running.extendleft(reqs)
+        self.running.extendleft(reversed(reqs))
         return Task(Task.DECODE, reqs)
 
     def schedule(self) -> Task | None:
