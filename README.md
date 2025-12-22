@@ -35,8 +35,8 @@ I run a simple benchmark on Qwen3-0.6B with batch size 64 and max sequence lengt
 
 |Engine          | Tokens/s      | Time(s) | Generated Tokens |
 |:---------------|:--------------|:--------|:-----------------|
-|vLLM            | 6090.73 tok/s | 28.80   |  175413          |
-|mini-vllm       | 4914.12 tok/s | 31.95   |  156985          |
+|vLLM            | 6090.73 tok/s | 28.80   |  185589          |
+|mini-vllm       | 5777.54 tok/s | 27.04   |  156199          |
 
 ## Features
 
@@ -48,7 +48,7 @@ I run a simple benchmark on Qwen3-0.6B with batch size 64 and max sequence lengt
 
 ## TODOs
 
-- [ ] CUDA graph.
+- [x] CUDA graph.
 - [ ] Chunked prefilling.
 - [ ] More models support (Llama2, Mistral, etc.)
 - [ ] Implement FlashAttention from scratch and replace the current FlashAttention implementation.

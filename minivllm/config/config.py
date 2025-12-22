@@ -37,7 +37,13 @@ class Config:
     # the size of each kv cache block
     kv_cache_block_size: int = 256
     # the max utilization of the kv cache memory
-    gpu_memory_utilization: float = 0.9
+    gpu_memory_utilization: float = 0.5
+    
+    
+    
+    # ================= executor config =================
+    # whether to use cuda graph for decoding
+    use_cuda_graph:  bool = True
 
 
     def __post_init__(self):

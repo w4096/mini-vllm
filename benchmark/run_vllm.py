@@ -19,10 +19,10 @@ def main():
             )
     
     prompts = [
-        "What is the meaning of life?",
         "What is the difference between GPT and ChatGPT?",
         "How do I get started with LLMs?",
-        "How to build a LLM inference engine from scratch?",
+        "What is the difference between supervised learning and reinforcement learning?",
+        "What is the meaning of life?",
     ] * 64
     prompts = [
         tokenizer.apply_chat_template(
@@ -35,7 +35,7 @@ def main():
     ]
     
     start = time.time()
-    outputs = model.generate(prompts, SamplingParams(temperature=1.0, max_tokens=1024))
+    outputs = model.generate(prompts, SamplingParams(temperature=1.0, max_tokens=1024, top_k=1))
 
     output_tokens = sum(len(output.outputs[0].token_ids) for output in outputs)
     print(f"Total generated tokens: {output_tokens}")

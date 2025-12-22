@@ -47,7 +47,7 @@ def main():
     print(f"Tokens/s: {output_tokens / t:.2f} tok/s")
     print(f"Total time taken (including overhead): {t:.2f} seconds")
     
-    for output in outputs[:4]:
+    for output in outputs[-4:]:
         print("=" * 50)
         print("Prompt:\n", output['prompt'])
         print("Completion:\n", output['completion'])

@@ -1,3 +1,4 @@
+from typing import Iterable
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -16,18 +17,34 @@ class Qwen3Attention(nn.Module):
 
         self.scaling = config.head_dim ** -0.5
 
-        self.q_proj = nn.Linear(
-            config.hidden_size, config.num_attention_heads * config.head_dim, bias=config.attention_bias
+        self.q_dim = config.num_attention_heads * config.head_dim
+        self.kv_dim = config.num_key_value_heads * config.head_dim
+        
+        def load_qkv_weight(weight, shard_name):
+            if shard_name == 'q_proj':
+                start = 0
+                end = self.q_dim
+            elif shard_name == 'k_proj':
+                start = self.q_dim
+                end = start + self.kv_dim
+            elif shard_name == 'v_proj':
+                start = self.q_dim + self.kv_dim
+                end = start + self.kv_dim
+            
+            param = torch.narrow(self.qkv_proj.weight.data, 0, start, end - start)
+            param.copy_(weight)
+        
+        self.qkv_proj = nn.Linear(
+            config.hidden_size,
+            self.q_dim + 2 * self.kv_dim,
+            bias=config.attention_bias,
         )
-        self.k_proj = nn.Linear(
-            config.hidden_size, config.num_key_value_heads * config.head_dim, bias=config.attention_bias
-        )
-        self.v_proj = nn.Linear(
-            config.hidden_size, config.num_key_value_heads * config.head_dim, bias=config.attention_bias
-        )
+        self.qkv_proj.weight.weight_loader = load_qkv_weight
+
         self.o_proj = nn.Linear(
             config.num_attention_heads * config.head_dim, config.hidden_size, bias=config.attention_bias
         )
+
         self.rotary_embedding = RotaryEmbedding.get(
             head_size=config.head_dim,
             rotary_dim=config.head_dim,
@@ -51,10 +68,9 @@ class Qwen3Attention(nn.Module):
             positions: torch.Tensor,
     ) -> torch.Tensor:
         # [seq_len, hidden_size]
-        q = self.q_proj(hidden_states)
-        k = self.k_proj(hidden_states)
-        v = self.v_proj(hidden_states)
-
+        qkv = self.qkv_proj(hidden_states)
+        q, k, v = qkv.split([self.q_dim, self.kv_dim, self.kv_dim], dim=-1)
+        
         # view: [seq_len, num_heads, head_dim]
         q = q.view(-1, self.config.num_attention_heads, self.config.head_dim)
         k = k.view(-1, self.config.num_key_value_heads, self.config.head_dim)
@@ -86,6 +102,7 @@ class MLP(nn.Module):
         self.up_proj = nn.Linear(hidden_size, intermediate_size, bias=False)
         self.down_proj = nn.Linear(intermediate_size, hidden_size, bias=False)
 
+    @torch.compile
     def forward(self, x):
         gate = self.gate_proj(x)
         up = self.up_proj(x)
@@ -104,10 +121,10 @@ class DecoderLayer(nn.Module):
             hidden_size=config.hidden_size,
             intermediate_size=config.intermediate_size,
         )
-        self.input_layernorm = RMSNorm(
+        self.input_layernorm = nn.RMSNorm(
             config.hidden_size, eps=config.rms_norm_eps
         )
-        self.post_attention_layernorm = RMSNorm(
+        self.post_attention_layernorm = nn.RMSNorm(
             config.hidden_size, eps=config.rms_norm_eps
         )
 
@@ -158,6 +175,7 @@ class Qwen3ForCausalLM(nn.Module):
             config: Qwen3Config
     ) -> None:
         super().__init__()
+        self.config = config
         self.model = Qwen3Model(config)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         
@@ -185,3 +203,28 @@ class Qwen3ForCausalLM(nn.Module):
         logits = self.lm_head(hidden_states)
         return logits
 
+
+    def load_weights(self, weights: Iterable[torch.Tensor]) -> None:
+        packed_modules_mapping = {
+            "q_proj": "qkv_proj",
+            "k_proj": "qkv_proj",
+            "v_proj": "qkv_proj",
+        }
+        
+        params = dict(self.named_parameters())
+        for name, weight in weights:            
+            if name.find('lm_head.weight') != -1 and self.config.tie_word_embeddings:
+                continue
+            
+            packed = False
+            for shard_name, packed_name in packed_modules_mapping.items():
+                if name.find(shard_name) != -1:
+                    name = name.replace(shard_name, packed_name)
+                    param = params[name]
+                    param.weight_loader(weight, shard_name)
+                    packed = True
+                    break
+            
+            if not packed:
+                param = params[name]
+                param.data.copy_(weight)

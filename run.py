@@ -14,7 +14,7 @@ def main():
         "What is the difference between GPT and ChatGPT?",
         "How do I get started with LLMs?",
         "How to build a LLM inference engine from scratch?",
-    ] * 64
+    ]
     prompts = [
         tokenizer.apply_chat_template(
             [{"role": "user", "content": prompt}],

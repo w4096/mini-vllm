@@ -20,9 +20,5 @@ def _get_weights_iterator(path: str):
 
 def load_model(config: Config) -> torch.nn.Module:
     model = _initialize_model(config)
-    params = dict(model.named_parameters())
-    for name, weight in _get_weights_iterator(config.model):
-        assert name in params, f"Parameter {name} not found in model"
-        param = params[name]
-        param.data.copy_(weight)
+    model.load_weights(_get_weights_iterator(config.model))
     return model

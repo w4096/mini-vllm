@@ -7,6 +7,7 @@ from minivllm.executor.context import Context, set_forward_context
 from minivllm.models.loader import load_model
 from minivllm.sched.task import Task
 from minivllm.models.layers.sampler import Sampler
+from minivllm.executor.graph import CUDAGraphExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,9 @@ class Executor:
 
         self.kv_cache = None
         self._init_kv_cache()
+        
+        self.graph_executor = CUDAGraphExecutor(self.model, self.config, self.config.max_num_batched_seqs)
+        self.graph_executor.capture()
 
         
     def _init_kv_cache(self):
@@ -72,7 +76,7 @@ class Executor:
 
 
     def _build_prefill_input(self, requests: list[Request]) -> tuple[torch.Tensor, Context]:
-        tokens = []
+        input_ids = []
         positions = []
         slot_mapping = []
         cu_seq_lens_q = [0]
@@ -83,7 +87,7 @@ class Executor:
 
         for req in requests:
             seqlen = len(req.tokens)
-            tokens.extend(req.tokens[req.num_cached_tokens:])
+            input_ids.extend(req.tokens[req.num_cached_tokens:])
             positions.extend(range(req.num_cached_tokens, seqlen))
             
             seqlen_q = seqlen - req.num_cached_tokens
@@ -106,27 +110,28 @@ class Executor:
         if cu_seq_lens_k[-1] > cu_seq_lens_q[-1]:
             block_table = self._build_block_table(requests)
 
-        ctx = Context()
-        ctx.prefill = True
-        tokens = torch.tensor(tokens, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
-        ctx.positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
-        ctx.cu_seq_lens_q = torch.tensor(cu_seq_lens_q, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
-        ctx.cu_seq_lens_k = torch.tensor(cu_seq_lens_k, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
-        ctx.slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
-        ctx.max_seq_len_q = max_seq_len_q
-        ctx.max_seq_len_k = max_seq_len_k
-        ctx.block_table = block_table
-        return tokens, ctx
+        input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
+        ctx = Context(
+            prefill=True,
+            positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True),
+            cu_seq_lens_q = torch.tensor(cu_seq_lens_q, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True),
+            cu_seq_lens_k = torch.tensor(cu_seq_lens_k, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True),
+            slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True),
+            max_seq_len_q = max_seq_len_q,
+            max_seq_len_k = max_seq_len_k,
+            block_table = block_table
+        )
+        return input_ids, ctx
 
 
     def _build_decode_input(self, requests: list[Request]) -> tuple[torch.Tensor, Context]:
-        tokens = []
+        input_ids = []
         positions = []
         slot_mapping = []
         context_lens = []
 
         for req in requests:
-            tokens.append(req.tokens[-1])
+            input_ids.append(req.tokens[-1])
             positions.append(len(req.tokens) - 1)
             context_lens.append(len(req.tokens))
 
@@ -134,14 +139,15 @@ class Executor:
             last_block_tokens = len(req.tokens) - (len(req.blocks) - 1) * self.config.kv_cache_block_size
             slot_mapping.append(slot_base_index + last_block_tokens - 1)
 
-        tokens = torch.tensor(tokens, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
-        ctx = Context()
-        ctx.prefill = False
-        ctx.positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
-        ctx.slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
-        ctx.context_lens = torch.tensor(context_lens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
-        ctx.block_table = self._build_block_table(requests)
-        return tokens, ctx
+        input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
+        ctx = Context(
+            prefill=False,
+            positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True),
+            slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True),
+            context_lens = torch.tensor(context_lens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True),
+            block_table = self._build_block_table(requests),
+        )
+        return input_ids, ctx
 
 
     @staticmethod
@@ -164,23 +170,28 @@ class Executor:
     @torch.inference_mode()
     def forward(self, ctx: Context, tokens: torch.Tensor) -> torch.Tensor:
         set_forward_context(ctx)
-        logits = self.model.compute_logits(self.model(tokens, ctx.positions))
+        
+        if ctx.prefill or not self.config.use_cuda_graph or self.graph_executor.max_batch_size < tokens.size(0):
+            logits = self.model.compute_logits(self.model(tokens, ctx.positions))
+        else:
+            logits = self.graph_executor.replay(ctx, tokens)
+            
         return logits
     
-    def sample(self, logits: torch.Tensor, temperatures: torch.Tensor):
+    def sample(self, logits: torch.Tensor, temperatures: torch.Tensor|None):
         return self.sampler(logits, temperatures).tolist()
-        
 
     def execute(self, task: Task) -> list[int]:
         if task.type == Task.PREFILL:
-            tokens, ctx = self._build_prefill_input(task.requests)
+            input_ids, ctx = self._build_prefill_input(task.requests)
         elif task.type == Task.DECODE:
-            tokens, ctx = self._build_decode_input(task.requests)
+            input_ids, ctx = self._build_decode_input(task.requests)
         else:
             raise ValueError(f"Unknown task type: {task.type}")
 
         temperatures = self._build_sample_input(task.requests)
 
-        logits = self.forward(ctx, tokens)
-        tokens = self.sample(logits, temperatures)
-        return tokens
+        logits = self.forward(ctx, input_ids)
+        output_tokens = self.sample(logits, temperatures)
+        return output_tokens
+    
