@@ -4,10 +4,10 @@ from torch import nn
 import torch.nn.functional as F
 from transformers.models.qwen3.configuration_qwen3 import Qwen3Config
 
-from minivllm.models.layers.norm import RMSNorm
-from minivllm.models.layers.rope import RotaryEmbedding
+from minivllm.models.layers.rotary import RotaryEmbedding
 from minivllm.models.layers.attention import FlashAttention
 from minivllm.executor.context import get_forward_context
+
 
 class Qwen3Attention(nn.Module):
 
@@ -19,7 +19,8 @@ class Qwen3Attention(nn.Module):
 
         self.q_dim = config.num_attention_heads * config.head_dim
         self.kv_dim = config.num_key_value_heads * config.head_dim
-        
+
+        # Define a custom weight loader for packed QKV weights
         def load_qkv_weight(weight, shard_name):
             if shard_name == 'q_proj':
                 start = 0
@@ -30,10 +31,11 @@ class Qwen3Attention(nn.Module):
             elif shard_name == 'v_proj':
                 start = self.q_dim + self.kv_dim
                 end = start + self.kv_dim
-            
-            param = torch.narrow(self.qkv_proj.weight.data, 0, start, end - start)
+
+            param = torch.narrow(self.qkv_proj.weight.data,
+                                 0, start, end - start)
             param.copy_(weight)
-        
+
         self.qkv_proj = nn.Linear(
             config.hidden_size,
             self.q_dim + 2 * self.kv_dim,
@@ -50,10 +52,9 @@ class Qwen3Attention(nn.Module):
             rotary_dim=config.head_dim,
             max_position=config.max_position_embeddings,
             rope_theta=config.rope_theta,
-            dtype=config.dtype,
         )
-        self.q_norm = RMSNorm(config.head_dim, eps=config.rms_norm_eps)
-        self.k_norm = RMSNorm(config.head_dim, eps=config.rms_norm_eps)
+        self.q_norm = nn.RMSNorm(config.head_dim, eps=config.rms_norm_eps)
+        self.k_norm = nn.RMSNorm(config.head_dim, eps=config.rms_norm_eps)
 
         self.attn = FlashAttention(
             num_heads=self.config.num_attention_heads,
@@ -70,7 +71,7 @@ class Qwen3Attention(nn.Module):
         # [seq_len, hidden_size]
         qkv = self.qkv_proj(hidden_states)
         q, k, v = qkv.split([self.q_dim, self.kv_dim, self.kv_dim], dim=-1)
-        
+
         # view: [seq_len, num_heads, head_dim]
         q = q.view(-1, self.config.num_attention_heads, self.config.head_dim)
         k = k.view(-1, self.config.num_key_value_heads, self.config.head_dim)
@@ -152,7 +153,9 @@ class Qwen3Model(nn.Module):
     ) -> None:
         super().__init__()
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size)
-        self.layers = nn.ModuleList([DecoderLayer(config) for _ in range(config.num_hidden_layers)])
+        self.layers = nn.ModuleList([
+            DecoderLayer(config) for _ in range(config.num_hidden_layers)
+        ])
         self.norm = nn.RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(
@@ -178,7 +181,7 @@ class Qwen3ForCausalLM(nn.Module):
         self.config = config
         self.model = Qwen3Model(config)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
-        
+
         if config.tie_word_embeddings:
             self.lm_head.weight.data = self.model.embed_tokens.weight.data
 
@@ -187,22 +190,24 @@ class Qwen3ForCausalLM(nn.Module):
             input_ids: torch.Tensor,
             positions: torch.Tensor,
     ) -> torch.Tensor:
-        return self.model(input_ids, positions)
+        x = self.model(input_ids, positions)
+        logits = self._compute_logits(x)
+        return logits
 
-    def compute_logits(
+    def _compute_logits(
             self,
             hidden_states: torch.Tensor,
     ) -> torch.Tensor:
         context = get_forward_context()
-        
-        # at prefill stage, we only need the last token
+
+        # at prefill stage, we only need the last token of each sequence
         if context.prefill:
             last_indices = context.cu_seq_lens_q[1:] - 1
             hidden_states = hidden_states[last_indices].contiguous()
-            
+
         logits = self.lm_head(hidden_states)
         return logits
-
+    
 
     def load_weights(self, weights: Iterable[torch.Tensor]) -> None:
         packed_modules_mapping = {
@@ -210,12 +215,12 @@ class Qwen3ForCausalLM(nn.Module):
             "k_proj": "qkv_proj",
             "v_proj": "qkv_proj",
         }
-        
+
         params = dict(self.named_parameters())
-        for name, weight in weights:            
+        for name, weight in weights:
             if name.find('lm_head.weight') != -1 and self.config.tie_word_embeddings:
                 continue
-            
+
             packed = False
             for shard_name, packed_name in packed_modules_mapping.items():
                 if name.find(shard_name) != -1:
@@ -224,7 +229,7 @@ class Qwen3ForCausalLM(nn.Module):
                     param.weight_loader(weight, shard_name)
                     packed = True
                     break
-            
+
             if not packed:
                 param = params[name]
                 param.data.copy_(weight)

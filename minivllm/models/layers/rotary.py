@@ -21,7 +21,6 @@ class RotaryEmbedding(nn.Module):
             rotary_dim: int,
             max_position_embeddings: int,
             rope_theta: float,
-            dtype: torch.dtype = torch.float32,
     ) -> None:
         super().__init__()
         assert head_size == rotary_dim
@@ -29,7 +28,6 @@ class RotaryEmbedding(nn.Module):
         self.rotary_dim = rotary_dim
         self.max_position_embeddings = max_position_embeddings
         self.rope_theta = rope_theta
-        self.dtype = dtype
         
         cache = self._compute_cos_sin_cache()
         self.register_buffer("cos_sin_cache", cache, persistent=False)
@@ -37,10 +35,10 @@ class RotaryEmbedding(nn.Module):
     def _compute_cos_sin_cache(self) -> torch.Tensor:
         # base^{-2i/d}
         # [rotary_dim/2]
-        inv_freq = 1.0 / (self.rope_theta ** (torch.arange(0, self.rotary_dim, 2, dtype=self.dtype) / self.rotary_dim))
+        inv_freq = 1.0 / (self.rope_theta ** (torch.arange(0, self.rotary_dim, 2, dtype=torch.float) / self.rotary_dim))
         
         # [max_position_embeddings]
-        t = torch.arange(self.max_position_embeddings, dtype=self.dtype)
+        t = torch.arange(self.max_position_embeddings, dtype=torch.float)
         
         # [max_position_embeddings, rotary_dim / 2]
         freqs = torch.einsum("i,j -> ij", t, inv_freq)
@@ -83,12 +81,10 @@ class RotaryEmbedding(nn.Module):
             rotary_dim: int,
             max_position: int,
             rope_theta: float,
-            dtype: torch.dtype = torch.float32,
     ) -> "RotaryEmbedding":
         return cls(
             head_size=head_size,
             rotary_dim=rotary_dim,
             max_position_embeddings=max_position,
             rope_theta=rope_theta,
-            dtype=dtype,
         )

@@ -12,29 +12,28 @@ class CUDAGraphExecutor:
         self.batch_size_list = [1, 2, 4, 8] + list(range(16, self.max_batch_size + 1, 16))
         self.graphs = {}
         self.pool = None
-        
+
         self.input_ids = torch.zeros(self.max_batch_size, dtype=torch.int64, device='cuda')
         self.positions = torch.zeros(self.max_batch_size, dtype=torch.int64, device='cuda')
         self.slot_mapping = torch.zeros(self.max_batch_size, dtype=torch.int32, device='cuda')
         self.context_lens = torch.zeros(self.max_batch_size, dtype=torch.int32, device='cuda')
         self.block_table = torch.zeros((self.max_batch_size, config.kv_cache_num_blocks), dtype=torch.int32, device='cuda')
-        self.outputs = torch.zeros(self.max_batch_size, config.hf_config.hidden_size, device='cuda')
-        
+        self.outputs = torch.zeros(self.max_batch_size, config.hf_config.vocab_size, device='cuda')
 
+    @torch.inference_mode()
     def capture(self):
         pbar = tqdm(
             reversed(self.batch_size_list),
             desc="Capturing CUDA graphs...",
         )
-        
+
         for batch_size in pbar:
             pbar.set_postfix({
                 "Batch Size": batch_size,
             })
             self._capture_batch(batch_size)
         pbar.close()
-        
-    
+
     def _capture_batch(self, batch_size: int):
         ctx = Context(
             prefill=False,
@@ -44,21 +43,22 @@ class CUDAGraphExecutor:
             block_table=self.block_table[:batch_size],
         )
         set_forward_context(ctx)
-        
+
         # we must run the model once before capturing the graph, since some pytorch ops need compile.
-        self.outputs[:batch_size] = self.model(self.input_ids[:batch_size], self.positions[:batch_size])
-        
+        self.outputs[:batch_size] = self.model(
+            self.input_ids[:batch_size], self.positions[:batch_size])
+
         g = torch.cuda.CUDAGraph()
         with torch.cuda.graph(g, pool=self.pool):
             self.outputs[:batch_size] = self.model(self.input_ids[:batch_size], self.positions[:batch_size])
-            
+
         # if this graph uses a new memory pool, we save it for next graphs.
         self.pool = g.pool()
-    
+
         self.graphs[batch_size] = g
         torch.cuda.synchronize()
-    
-        
+
+    @torch.inference_mode()
     def replay(self, ctx: Context, input_ids: torch.Tensor) -> torch.Tensor:
         bs = input_ids.size(0)
         graph = self.graphs[next(b for b in self.batch_size_list if b >= bs)]
@@ -70,4 +70,4 @@ class CUDAGraphExecutor:
         self.context_lens[:bs] = ctx.context_lens
         self.block_table[:bs, :ctx.block_table.size(1)] = ctx.block_table
         graph.replay()
-        return self.model.compute_logits(self.outputs[:bs])
+        return self.outputs[:bs]

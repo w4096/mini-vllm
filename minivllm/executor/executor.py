@@ -167,12 +167,11 @@ class Executor:
         return temperatures
 
 
-    @torch.inference_mode()
     def forward(self, ctx: Context, tokens: torch.Tensor) -> torch.Tensor:
         set_forward_context(ctx)
         
         if ctx.prefill or not self.config.use_cuda_graph or self.graph_executor.max_batch_size < tokens.size(0):
-            logits = self.model.compute_logits(self.model(tokens, ctx.positions))
+            logits = self.model(tokens, ctx.positions)
         else:
             logits = self.graph_executor.replay(ctx, tokens)
             
@@ -181,6 +180,7 @@ class Executor:
     def sample(self, logits: torch.Tensor, temperatures: torch.Tensor|None):
         return self.sampler(logits, temperatures).tolist()
 
+    @torch.inference_mode()
     def execute(self, batch: Batch) -> list[int]:
         if batch.type == Batch.PREFILL:
             input_ids, ctx = self._build_prefill_input(batch.requests)

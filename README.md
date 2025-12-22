@@ -36,13 +36,13 @@ I run a simple benchmark on Qwen3-0.6B with batch size 64 and max sequence lengt
 |Engine          | Tokens/s      | Time(s) | Generated Tokens |
 |:---------------|:--------------|:--------|:-----------------|
 |vLLM            | 6090.73 tok/s | 28.80   |  185589          |
-|mini-vllm       | 5777.54 tok/s | 27.04   |  156199          |
+|mini-vllm       | 5004.99 tok/s | 35.45   |  177421          |
 
 ## Features
 
 - Support Qwen3 series (more models will be added later)
-- Currently, I use FlashAttention as the attention implementation. I plan to implement FlashAttention from scratch later.
 - Continuous batching for better throughput.
+- Cuda graph.
 - KV cache management for efficient generation.
 - Prefix caching.
 

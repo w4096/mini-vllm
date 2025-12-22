@@ -8,7 +8,7 @@ class Sampler(nn.Module):
 
     @torch.compile
     def forward(self, logits: torch.Tensor, temperatures: torch.Tensor|None) -> torch.Tensor:
-        logits.div_(temperatures.unsqueeze(-1))
+        logits = logits.div(temperatures.unsqueeze(-1))
         torch.softmax(logits, dim=-1, out=logits)
         return torch.multinomial(logits, num_samples=1).view(-1)
  
