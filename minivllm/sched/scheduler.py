@@ -105,7 +105,7 @@ class Scheduler:
 
             eos_reached = token == self.eos
             max_len_reached = len(req.completion_tokens) >= req.sampling_params.max_tokens
-            if eos_reached or max_len_reached:
+            if  max_len_reached or (eos_reached and not req.sampling_params.ignore_eos):
                 req.state = RequestState.FINISHED
                 self.block_manager.deallocate(req)
                 self.running.remove(req)

@@ -33,12 +33,10 @@ $ python run.py
 
 I run a simple benchmark on Qwen3-0.6B with batch size 64 and max sequence length 1024 on a RTX 5070 GPU. The results are as follows:
 
-```
 |Engine          | Tokens/s      | Time(s) | Generated Tokens |
 |:---------------|:--------------|:--------|:-----------------|
 |vLLM            | 6090.73 tok/s | 28.80   |  175413          |
 |mini-vllm       | 4914.12 tok/s | 31.95   |  156985          |
-```
 
 ## Features
 
@@ -62,7 +60,7 @@ Here are some resources may help you better understanding LLM inference and vLLM
 
 - [Inside vLLM: Anatomy of a High-Throughput LLM Inference System](https://www.aleksagordic.com/blog/vllm)
 - I am writing a series of blog posts to explain some key techniques used in building LLM inference engines:
-  - [how continous batching works](https://wangyu.me/posts/llm/continuous-batching/)
+  - [How Continous Batching Works](https://wangyu.me/posts/llm/continuous-batching/)
   - [Build Qwen3 from Scratch](https://wangyu.me/posts/llm/qwen3-from-scratch/) 
 
 ## References
