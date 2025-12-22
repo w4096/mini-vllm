@@ -1,7 +1,7 @@
 import time
 from minivllm.engine.request import Request
 
-class Task:
+class Batch:
     PREFILL = 0
     DECODE = 1
 

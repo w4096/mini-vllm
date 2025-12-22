@@ -5,7 +5,7 @@ from minivllm.config.config import Config
 from minivllm.engine.request import Request
 from minivllm.executor.context import Context, set_forward_context
 from minivllm.models.loader import load_model
-from minivllm.sched.task import Task
+from minivllm.scheduler.batch import Batch
 from minivllm.models.layers.sampler import Sampler
 from minivllm.executor.graph import CUDAGraphExecutor
 
@@ -70,7 +70,7 @@ class Executor:
         num_batched_seqs = 10
         reqs = [Request([0] * max_model_len) for _ in range(num_batched_seqs)]
         
-        self.execute(Task(Task.PREFILL, reqs))
+        self.execute(Batch(Batch.PREFILL, reqs))
         
         torch.cuda.empty_cache()
 
@@ -181,15 +181,15 @@ class Executor:
     def sample(self, logits: torch.Tensor, temperatures: torch.Tensor|None):
         return self.sampler(logits, temperatures).tolist()
 
-    def execute(self, task: Task) -> list[int]:
-        if task.type == Task.PREFILL:
-            input_ids, ctx = self._build_prefill_input(task.requests)
-        elif task.type == Task.DECODE:
-            input_ids, ctx = self._build_decode_input(task.requests)
+    def execute(self, batch: Batch) -> list[int]:
+        if batch.type == Batch.PREFILL:
+            input_ids, ctx = self._build_prefill_input(batch.requests)
+        elif batch.type == Batch.DECODE:
+            input_ids, ctx = self._build_decode_input(batch.requests)
         else:
-            raise ValueError(f"Unknown task type: {task.type}")
+            raise ValueError(f"Unknown batch type: {batch.type}")
 
-        temperatures = self._build_sample_input(task.requests)
+        temperatures = self._build_sample_input(batch.requests)
 
         logits = self.forward(ctx, input_ids)
         output_tokens = self.sample(logits, temperatures)

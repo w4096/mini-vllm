@@ -1,5 +1,5 @@
 import time
-from minivllm.sched.task import Task
+from minivllm.scheduler.batch import Batch
 
 class Stats:
     def __init__(self):
@@ -24,25 +24,25 @@ class Metrics:
         self.finished_request_count = 0
         self.start_time = time.perf_counter()
 
-    def update(self, task: Task):
-        if task.type == Task.PREFILL:
-            self._update_prefill_metrics(task)
+    def update(self, batch: Batch):
+        if batch.type == Batch.PREFILL:
+            self._update_prefill_metrics(batch)
         else:
-            self._update_decode_metrics(task)
+            self._update_decode_metrics(batch)
 
-    def _update_prefill_metrics(self, task: Task):
+    def _update_prefill_metrics(self, batch: Batch):
         self.prefill_steps += 1
-        self.prefill_time += time.perf_counter() - task.create_time
+        self.prefill_time += time.perf_counter() - batch.create_time
 
-        for req in task.requests:
+        for req in batch.requests:
             self.prefill_tokens += len(req.tokens) - req.num_cached_tokens
 
-    def _update_decode_metrics(self, task: Task):
+    def _update_decode_metrics(self, batch: Batch):
         self.decode_steps += 1
-        self.decode_tokens += len(task.requests)
-        self.decode_time += time.perf_counter() - task.create_time
+        self.decode_tokens += len(batch.requests)
+        self.decode_time += time.perf_counter() - batch.create_time
 
-        for req in task.requests:
+        for req in batch.requests:
             if req.finished:
                 self.finished_request_count += 1
 

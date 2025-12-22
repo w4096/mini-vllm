@@ -5,7 +5,7 @@ from transformers.models.auto.tokenization_auto import AutoTokenizer
 from minivllm.engine.request import Request
 from minivllm.config.config import Config
 from minivllm.config.sampling import SamplingParams
-from minivllm.sched.scheduler import Scheduler, Task
+from minivllm.scheduler.scheduler import Scheduler, Batch
 from minivllm.executor.executor import Executor
 from minivllm.engine.metrics import Metrics
 
@@ -24,12 +24,12 @@ class Engine:
         self.scheduler.submit(req)
 
 
-    def step(self) -> Task:
-        task = self.scheduler.schedule()
-        tokens = self.executor.execute(task)
-        self.scheduler.update(task, tokens)
-        self.metrics.update(task)
-        return task
+    def step(self) -> Batch:
+        batch = self.scheduler.schedule()
+        tokens = self.executor.execute(batch)
+        self.scheduler.update(batch, tokens)
+        self.metrics.update(batch)
+        return batch
 
     @property
     def finished(self):
@@ -52,7 +52,7 @@ class Engine:
 
         finished_requests: list[Request] = []
         while not self.finished:
-            task = self.step()
+            batch = self.step()
 
             if pbar:
                 s = self.metrics.stats()
@@ -67,7 +67,7 @@ class Engine:
                 pbar.update(s.finished_requests - stats.finished_requests)
                 stats = s
 
-            for req in task.requests:
+            for req in batch.requests:
                 if req.finished:
                     finished_requests.append(req)
 

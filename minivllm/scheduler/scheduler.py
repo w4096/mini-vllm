@@ -5,7 +5,7 @@ from minivllm.config.config import Config
 from minivllm.engine.request import Request, RequestState
 
 from minivllm.kvcache.block_manager import KVCacheBlockManager
-from minivllm.sched.task import Task
+from minivllm.scheduler.batch import Batch
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class Scheduler:
         self.waiting.append(req)
 
 
-    def _schedule_prefill(self) -> Task | None:
+    def _schedule_prefill(self) -> Batch | None:
         """
         Schedule prefill requests.
         :return: None
@@ -56,11 +56,11 @@ class Scheduler:
             self.running.append(req)
             reqs.append(req)
         if reqs:
-            return Task(Task.PREFILL, reqs)
+            return Batch(Batch.PREFILL, reqs)
         return None
 
 
-    def _schedule_decode(self) -> Task | None:
+    def _schedule_decode(self) -> Batch | None:
         """
         Schedule decode requests.
         :return: None
@@ -79,9 +79,9 @@ class Scheduler:
                 self.block_manager.append_block_if_needed(req)
                 reqs.append(req)
         self.running.extendleft(reversed(reqs))
-        return Task(Task.DECODE, reqs)
+        return Batch(Batch.DECODE, reqs)
 
-    def schedule(self) -> Task | None:
+    def schedule(self) -> Batch | None:
         out = self._schedule_prefill()
         if out is not None:
             return out
@@ -99,8 +99,8 @@ class Scheduler:
         self.waiting.appendleft(req)
 
 
-    def update(self, task: Task, tokens: list[int]):
-        for req, token in zip(task.requests, tokens):
+    def update(self, batch: Batch, tokens: list[int]):
+        for req, token in zip(batch.requests, tokens):
             req.append_output_token(token)
 
             eos_reached = token == self.eos
