@@ -1,6 +1,8 @@
 ## mini-vllm
 
-A lightweight LLM inference engine built from scratch. The main purpose of this project is to help me better understand how to build a LLM inference engine like vLLM. The implementation is kept as simple as possible for easy understanding, and some components may not be optimized.
+A lightweight LLM inference engine built from scratch.
+
+The main purpose of this project is to help me understand how LLM inference engine works. The implementation is kept as simple as possible for easy understanding. Currently, this project has only 1000 lines of code.
 
 ## Quick Start
 

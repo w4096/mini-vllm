@@ -3,7 +3,7 @@ import logging
 
 from minivllm.config.config import Config
 from minivllm.engine.request import Request
-from minivllm.executor.context import Context, set_forward_context
+from minivllm.executor.context import Context
 from minivllm.models.loader import load_model
 from minivllm.scheduler.batch import Batch
 from minivllm.models.layers.sampler import Sampler
@@ -165,29 +165,36 @@ class Executor:
             temperatures.append(req.sampling_params.temperature)
         temperatures = torch.tensor(temperatures, dtype=torch.float32, pin_memory=True).cuda(non_blocking=True)
         return temperatures
-
-
-    def forward(self, ctx: Context, tokens: torch.Tensor) -> torch.Tensor:
-        set_forward_context(ctx)
-        
-        if ctx.prefill or not self.config.use_cuda_graph or self.graph_executor.max_batch_size < tokens.size(0):
-            logits = self.model(tokens, ctx.positions)
-        else:
-            logits = self.graph_executor.replay(ctx, tokens)
-            
-        return logits
     
     def sample(self, logits: torch.Tensor, temperatures: torch.Tensor|None):
         return self.sampler(logits, temperatures).tolist()
+
+
+    def prefill(self, ctx: Context, input_ids: torch.Tensor) -> torch.Tensor:
+        logits = self.model(ctx, input_ids, ctx.positions)
+        return logits
+
+    def decode(self, ctx: Context, input_ids: torch.Tensor) -> list[int]:
+        if not self.config.use_cuda_graph or self.graph_executor.max_batch_size < input_ids.size(0):
+            logits = self.model(ctx, input_ids, ctx.positions)
+        else:
+            logits = self.graph_executor.replay(ctx, input_ids)
+        return logits
+    
+    def forward(self, ctx: Context, tokens: torch.Tensor) -> torch.Tensor:
+        if ctx.prefill:
+            logits = self.prefill(ctx, tokens)
+        else:
+            logits = self.decode(ctx, tokens)
+            
+        return logits
 
     @torch.inference_mode()
     def execute(self, batch: Batch) -> list[int]:
         if batch.type == Batch.PREFILL:
             input_ids, ctx = self._build_prefill_input(batch.requests)
-        elif batch.type == Batch.DECODE:
-            input_ids, ctx = self._build_decode_input(batch.requests)
         else:
-            raise ValueError(f"Unknown batch type: {batch.type}")
+            input_ids, ctx = self._build_decode_input(batch.requests)
 
         temperatures = self._build_sample_input(batch.requests)
 

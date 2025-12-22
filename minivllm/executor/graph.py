@@ -1,7 +1,7 @@
 import torch
 from tqdm import tqdm
 from minivllm.config.config import Config
-from minivllm.executor.context import Context, set_forward_context
+from minivllm.executor.context import Context
 
 
 class CUDAGraphExecutor:
@@ -42,15 +42,14 @@ class CUDAGraphExecutor:
             context_lens=self.context_lens[:batch_size],
             block_table=self.block_table[:batch_size],
         )
-        set_forward_context(ctx)
 
         # we must run the model once before capturing the graph, since some pytorch ops need compile.
         self.outputs[:batch_size] = self.model(
-            self.input_ids[:batch_size], self.positions[:batch_size])
+            ctx, self.input_ids[:batch_size], self.positions[:batch_size])
 
         g = torch.cuda.CUDAGraph()
         with torch.cuda.graph(g, pool=self.pool):
-            self.outputs[:batch_size] = self.model(self.input_ids[:batch_size], self.positions[:batch_size])
+            self.outputs[:batch_size] = self.model(ctx, self.input_ids[:batch_size], self.positions[:batch_size])
 
         # if this graph uses a new memory pool, we save it for next graphs.
         self.pool = g.pool()

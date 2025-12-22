@@ -83,13 +83,3 @@ class Context:
     """
     block_table: torch.Tensor | None = None
 
-
-__ctx: Context | None = None
-
-def get_forward_context() -> Context:
-    global __ctx
-    return __ctx
-
-def set_forward_context(context: Context):
-    global __ctx
-    __ctx = context

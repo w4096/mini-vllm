@@ -6,7 +6,7 @@ from transformers.models.qwen3.configuration_qwen3 import Qwen3Config
 
 from minivllm.models.layers.rotary import RotaryEmbedding
 from minivllm.models.layers.attention import FlashAttention
-from minivllm.executor.context import get_forward_context
+from minivllm.executor.context import Context
 
 
 class Qwen3Attention(nn.Module):
@@ -65,6 +65,7 @@ class Qwen3Attention(nn.Module):
 
     def forward(
             self,
+            ctx: Context,
             hidden_states: torch.Tensor,
             positions: torch.Tensor,
     ) -> torch.Tensor:
@@ -82,7 +83,7 @@ class Qwen3Attention(nn.Module):
 
         q, k = self.rotary_embedding(positions, q, k)
 
-        o = self.attn(q, k, v)
+        o = self.attn(ctx, q, k, v)
 
         # [seq_len, num_heads, head_dim] -> [seq_len, hidden_size]
         o = o.flatten(1, -1)
@@ -131,12 +132,13 @@ class DecoderLayer(nn.Module):
 
     def forward(
             self,
+            ctx: Context,
             x: torch.Tensor,
             positions: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         shortcut = x
         x = self.input_layernorm(x)
-        x = self.self_attn(x, positions)
+        x = self.self_attn(ctx, x, positions)
         x = x + shortcut
 
         shortcut = x
@@ -160,13 +162,14 @@ class Qwen3Model(nn.Module):
 
     def forward(
             self,
+            ctx: Context,
             input_ids: torch.Tensor,
             positions: torch.Tensor,
     ) -> torch.Tensor:
         x = self.embed_tokens(input_ids)
 
         for layer in self.layers:
-            x = layer(x, positions)
+            x = layer(ctx, x, positions)
 
         x = self.norm(x)
         return x
@@ -187,27 +190,19 @@ class Qwen3ForCausalLM(nn.Module):
 
     def forward(
             self,
+            ctx: Context,
             input_ids: torch.Tensor,
             positions: torch.Tensor,
     ) -> torch.Tensor:
-        x = self.model(input_ids, positions)
-        logits = self._compute_logits(x)
-        return logits
-
-    def _compute_logits(
-            self,
-            hidden_states: torch.Tensor,
-    ) -> torch.Tensor:
-        context = get_forward_context()
+        hidden_states = self.model(ctx, input_ids, positions)
 
         # at prefill stage, we only need the last token of each sequence
-        if context.prefill:
-            last_indices = context.cu_seq_lens_q[1:] - 1
+        if ctx.prefill:
+            last_indices = ctx.cu_seq_lens_q[1:] - 1
             hidden_states = hidden_states[last_indices].contiguous()
 
         logits = self.lm_head(hidden_states)
         return logits
-    
 
     def load_weights(self, weights: Iterable[torch.Tensor]) -> None:
         packed_modules_mapping = {

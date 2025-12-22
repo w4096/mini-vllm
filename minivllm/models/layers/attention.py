@@ -4,7 +4,7 @@ import triton
 import triton.language as tl
 
 from flash_attn import flash_attn_varlen_func, flash_attn_with_kvcache
-from minivllm.executor.context import get_forward_context
+from minivllm.executor.context import Context
 
 
 # this file is copied from nano-vllm with minor modifications
@@ -59,24 +59,23 @@ class FlashAttention(nn.Module):
         
         self.k_cache = self.v_cache = torch.tensor([])
 
-    def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor):
+    def forward(self, ctx: Context, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor):
         
-        context = get_forward_context()
         k_cache, v_cache = self.k_cache, self.v_cache
         
         if k_cache.numel() and v_cache.numel():
-            store_kvcache(k, v, k_cache, v_cache, context.slot_mapping)
+            store_kvcache(k, v, k_cache, v_cache, ctx.slot_mapping)
             
-        if context.prefill:
-            if context.block_table is not None:    # prefix cache
+        if ctx.prefill:
+            if ctx.block_table is not None:    # prefix cache
                 k, v = k_cache, v_cache
             o = flash_attn_varlen_func(q, k, v,
-                                       max_seqlen_q=context.max_seq_len_q, cu_seqlens_q=context.cu_seq_lens_q,
-                                       max_seqlen_k=context.max_seq_len_k, cu_seqlens_k=context.cu_seq_lens_k,
-                                       softmax_scale=self.scale, causal=True, block_table=context.block_table)
+                                       max_seqlen_q=ctx.max_seq_len_q, cu_seqlens_q=ctx.cu_seq_lens_q,
+                                       max_seqlen_k=ctx.max_seq_len_k, cu_seqlens_k=ctx.cu_seq_lens_k,
+                                       softmax_scale=self.scale, causal=True, block_table=ctx.block_table)
         else:
             # decode
             o = flash_attn_with_kvcache(q.unsqueeze(1), k_cache, v_cache,
-                                        cache_seqlens=context.context_lens, block_table=context.block_table,
+                                        cache_seqlens=ctx.context_lens, block_table=ctx.block_table,
                                         softmax_scale=self.scale, causal=True)
         return o

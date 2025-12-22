@@ -32,7 +32,7 @@ def main():
     sampling_params = SamplingParams(temperature=1.0, max_tokens=1024)
     outputs = engine.generate(prompts, sampling_params)
 
-    for output in outputs[:4]:
+    for output in outputs:
         print("=" * 50)
         print("Prompt:\n", output['prompt'])
         print("Completion:\n", output['completion'])
