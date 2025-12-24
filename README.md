@@ -10,9 +10,7 @@ Download a model from Huggingface. Now, only Qwen3 series are supported and only
 
 ```sh
 # download model
-$ huggingface-cli download --resume-download Qwen/Qwen3-0.6B \
-    --local-dir ~/huggingface/Qwen3-0.6B/ \
-    --local-dir-use-symlinks False
+$ hf download Qwen/Qwen3-0.6B
 ```
 
 Clone this repo and install dependencies:

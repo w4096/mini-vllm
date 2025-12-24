@@ -2,8 +2,7 @@ import logging
 from collections import deque
 
 from minivllm.config.config import Config
-from minivllm.engine.request import Request, RequestState
-
+from minivllm.engine.request import Request
 from minivllm.kvcache.block_manager import KVCacheBlockManager
 from minivllm.scheduler.batch import Batch
 
@@ -51,7 +50,7 @@ class Scheduler:
                 break
             num_batched_tokens += num_prefill_tokens
             self.block_manager.allocate_blocks_for_prefill(req)
-            req.state = RequestState.RUNNING
+            req.state = Request.RUNNING
             self.waiting.popleft()
             self.running.append(req)
             reqs.append(req)
@@ -75,11 +74,14 @@ class Scheduler:
                     self.preempt(req)
                     break
 
-            if req.state == RequestState.RUNNING:
-                self.block_manager.append_block_if_needed(req)
+            if req.state == Request.RUNNING:
+                self.block_manager.allocate_block_for_decode(req)
                 reqs.append(req)
-        self.running.extendleft(reversed(reqs))
-        return Batch(Batch.DECODE, reqs)
+        if reqs:
+            self.running.extendleft(reversed(reqs))
+            return Batch(Batch.DECODE, reqs)
+        else:
+            return None
 
     def schedule(self) -> Batch | None:
         out = self._schedule_prefill()
@@ -94,7 +96,7 @@ class Scheduler:
         No more KVCacheBlocks available for the next request, we have to preempt this request
         and release its KVCacheBlocks.
         """
-        req.state = RequestState.WAITING
+        req.state = Request.WAITING
         self.block_manager.deallocate(req)
         self.waiting.appendleft(req)
 
@@ -106,7 +108,7 @@ class Scheduler:
             eos_reached = token == self.eos
             max_len_reached = len(req.completion_tokens) >= req.sampling_params.max_tokens
             if  max_len_reached or (eos_reached and not req.sampling_params.ignore_eos):
-                req.state = RequestState.FINISHED
+                req.state = Request.FINISHED
                 self.block_manager.deallocate(req)
                 self.running.remove(req)
             else:

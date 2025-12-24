@@ -1,4 +1,4 @@
-from minivllm.engine.request import Request, RequestState
+from minivllm.engine.request import Request
 from collections import deque
 from minivllm.utils import utils
 import xxhash
@@ -51,7 +51,7 @@ class KVCacheBlockManager:
         self.hash_to_block_id: dict[int, int] = {}
 
     def allocate_blocks_for_prefill(self, req: Request):
-        assert req.state == RequestState.WAITING
+        assert req.state == Request.WAITING
         assert len(req.blocks) == 0
 
         hash_ = -1
@@ -83,12 +83,11 @@ class KVCacheBlockManager:
 
             req.blocks.append(block.id)
 
-    def append_block_if_needed(self, req: Request):
+    def allocate_block_for_decode(self, req: Request):
         """
         In decode stage, we only need to allocate a new block if all the allocated blocks are used.
         """
-
-        assert req.state == RequestState.RUNNING
+        assert req.state == Request.RUNNING
         assert len(req.blocks) > 0
         if self.request_required_blocks(req) > 0:
             block = self._allocate()

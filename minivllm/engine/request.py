@@ -1,20 +1,19 @@
 import copy
 from itertools import count
 from typing import List
-from enum import Enum, auto
 from minivllm.config.sampling import SamplingParams
 
 
-class RequestState(Enum):
-    WAITING = auto()
-    RUNNING = auto()
-    FINISHED = auto()
-
 class Request:
+    WAITING = 0
+    RUNNING = 1
+    FINISHED = 2
+    
     counter = count()
+
     def __init__(self, prompt_tokens: List[int], sampling_params: SamplingParams = SamplingParams()):
         self.id = next(Request.counter)
-        self.state = RequestState.WAITING
+        self.state = Request.WAITING
         self.prompt_token_count = len(prompt_tokens)
         self.tokens = copy.copy(prompt_tokens)
 
@@ -34,7 +33,7 @@ class Request:
 
     @property
     def finished(self):
-        return self.state == RequestState.FINISHED
+        return self.state == Request.FINISHED
 
     def append_output_token(self, token: int):
         self.tokens.append(token)
