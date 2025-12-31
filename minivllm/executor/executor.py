@@ -9,8 +9,6 @@ from minivllm.scheduler.batch import Batch
 from minivllm.models.layers.sampler import Sampler
 from minivllm.executor.graph import CUDAGraphExecutor
 
-logger = logging.getLogger(__name__)
-
 class Executor:
     def __init__(self, config: Config):
         self.config = config
@@ -22,14 +20,17 @@ class Executor:
 
         self._warmup_model()
 
-        self.kv_cache = None
         self._init_kv_cache()
         
-        self.graph_executor = CUDAGraphExecutor(self.model, self.config, self.config.max_num_batched_seqs)
-        self.graph_executor.capture()
+        if config.use_cuda_graph:
+            logging.info("Initializing CUDA graph executor...")
+            self.graph_executor = CUDAGraphExecutor(self.model, self.config, self.config.max_num_batched_seqs)
+            self.graph_executor.capture()
 
         
     def _init_kv_cache(self):
+        logging.info("Initializing key-value cache...")
+    
         config = self.config
         hf_config = self.config.hf_config
         free, total = torch.cuda.mem_get_info()
@@ -49,7 +50,7 @@ class Executor:
         
         self.kv_cache = torch.empty(2, hf_config.num_hidden_layers, kv_cache_num_blocks, config.kv_cache_block_size, num_kv_heads, head_dim)
         
-        logger.info(f'Allocated {kv_cache_num_blocks} key-value cache blocks.')
+        logging.info(f'Allocated {kv_cache_num_blocks} key-value cache blocks.')
         
         layer_id = 0
         for module in self.model.modules():
@@ -59,6 +60,8 @@ class Executor:
                 layer_id += 1
 
     def _warmup_model(self):
+        logging.info("Warming up model...")
+        
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
         
@@ -175,10 +178,10 @@ class Executor:
         return logits
 
     def decode(self, ctx: Context, input_ids: torch.Tensor) -> list[int]:
-        if not self.config.use_cuda_graph or self.graph_executor.max_batch_size < input_ids.size(0):
-            logits = self.model(ctx, input_ids, ctx.positions)
-        else:
+        if self.config.use_cuda_graph and self.graph_executor.max_batch_size >= input_ids.size(0):
             logits = self.graph_executor.replay(ctx, input_ids)
+        else:
+            logits = self.model(ctx, input_ids, ctx.positions)
         return logits
     
     def forward(self, ctx: Context, tokens: torch.Tensor) -> torch.Tensor:

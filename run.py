@@ -1,12 +1,16 @@
 import os
+import logging
 
 from minivllm.engine.engine import Engine
 from minivllm.config.sampling import SamplingParams
 from transformers import AutoTokenizer
 from minivllm.config.config import Config
 
+logging.basicConfig(format='%(asctime)s: %(message)s', level=logging.INFO, datefmt='%m-%d-%Y %H:%M:%S')
+
 def main():
-    path = os.path.expanduser("~/huggingface/Qwen3-0.6B/")
+    path = os.path.expanduser("~/code/gemma-3-1b-it")
+    
     tokenizer = AutoTokenizer.from_pretrained(path)
 
     prompts = [

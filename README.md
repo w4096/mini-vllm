@@ -57,14 +57,6 @@ I run a simple benchmark on Qwen3-0.6B with batch size 64 and max sequence lengt
 - KV cache management for efficient generation.
 - Prefix caching.
 
-## TODOs
-
-- [x] CUDA graph.
-- [ ] Chunked prefilling.
-- [ ] More models support (Llama2, Mistral, etc.)
-- [ ] Implement FlashAttention from scratch and replace the current FlashAttention implementation.
-- [ ] Performance tuning.
-
 ## Resources
 
 Here are some resources may help you better understanding LLM inference and vLLM:

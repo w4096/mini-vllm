@@ -1,9 +1,10 @@
+import logging
 import os
 from glob import glob
 import torch
 import safetensors
 from minivllm.config.config import Config
-from minivllm.models import get_model_class
+from minivllm.models.models import get_model_class
 
 def _initialize_model(config: Config) -> torch.nn.Module:
     architecture = config.hf_config.architectures[0]
@@ -21,6 +22,8 @@ def _get_weights_iterator(path: str):
 
 
 def load_model(config: Config) -> torch.nn.Module:
+    logging.info("Loading model on device...")
+    
     model = _initialize_model(config)
     model.load_weights(_get_weights_iterator(config.model))
     return model
