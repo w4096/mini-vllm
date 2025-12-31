@@ -2,7 +2,6 @@ from minivllm.engine.request import Request
 from collections import deque
 from minivllm.utils import utils
 import xxhash
-import numpy as np
 
 
 class KVCacheBlock:
@@ -26,7 +25,8 @@ class KVCacheBlock:
         h = xxhash.xxh64()
         if prefix != -1:
             h.update(prefix.to_bytes(8, "little"))
-        h.update(np.array(tokens).tobytes())
+        for token in tokens:
+            h.update(token.to_bytes(4, "little", signed=True))
         return h.intdigest()
 
 
@@ -122,7 +122,7 @@ class KVCacheBlockManager:
         block.reset()
         self.used_block_ids.add(bid)
         if block.hash != -1 and block.hash in self.hash_to_block_id:
-            del self.hash_to_block_id[block.id]
+            del self.hash_to_block_id[block.hash]
         return block
 
     def can_allocate_new_block(self, req: Request):
@@ -143,12 +143,13 @@ class KVCacheBlockManager:
         Cache the last block of the request if it is full
         """
         if len(req.tokens) % self.block_size == 0:
-            assert self.block_table[req.blocks[-1]].hash == -1
+            last_block = self.block_table[req.blocks[-1]]
+            assert last_block.hash == -1
             tokens = req.tokens[-self.block_size:]
             if len(req.blocks) > 1:
                 prefix = self.block_table[req.blocks[-2]].hash
             else:   
                 prefix = -1
             h = KVCacheBlock.compute_hash(tokens, prefix)
-            self.block_table[req.blocks[-1]].update(h, tokens)
+            last_block.update(h, tokens)
             self.hash_to_block_id[h] = req.blocks[-1]
