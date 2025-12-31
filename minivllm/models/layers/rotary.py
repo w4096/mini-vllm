@@ -17,14 +17,11 @@ def apply_rotary_embedding(
 class RotaryEmbedding(nn.Module):
     def __init__(
             self,
-            head_size: int,
             rotary_dim: int,
             max_position_embeddings: int,
             rope_theta: float,
     ) -> None:
         super().__init__()
-        assert head_size == rotary_dim
-        self.head_size = head_size
         self.rotary_dim = rotary_dim
         self.max_position_embeddings = max_position_embeddings
         self.rope_theta = rope_theta
@@ -73,18 +70,4 @@ class RotaryEmbedding(nn.Module):
         key = apply_rotary_embedding(key, cos, sin)
         return query, key
 
-    @classmethod
-    @lru_cache(1)
-    def get(
-            cls,
-            head_size: int,
-            rotary_dim: int,
-            max_position: int,
-            rope_theta: float,
-    ) -> "RotaryEmbedding":
-        return cls(
-            head_size=head_size,
-            rotary_dim=rotary_dim,
-            max_position_embeddings=max_position,
-            rope_theta=rope_theta,
-        )
+

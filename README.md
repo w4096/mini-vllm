@@ -6,7 +6,7 @@ The main purpose of this project is to help me understand how LLM inference engi
 
 ## Quick Start
 
-Download a model from Huggingface. Now, only Qwen3 series are supported and only Qwen3-0.6B is tested. More models will be added later. 
+Download a model from Huggingface.
 
 ```sh
 # download model
@@ -29,14 +29,25 @@ Run inference:
 $ python run.py
 ```
 
+## Supported Models
+
+Currently supported models:
+
+| Model Name    | Huggingface Path        |
+|:--------------|:------------------------|
+| Qwen3         | Qwen/Qwen3-0.6B         |
+| Gemma3        | google/gemma-3-1b-it    |
+
 ## Benchmark
 
 I run a simple benchmark on Qwen3-0.6B with batch size 64 and max sequence length 1024 on a RTX 5070 GPU. The results are as follows:
 
-|Engine          | Tokens/s      | Time(s) | Generated Tokens |
-|:---------------|:--------------|:--------|:-----------------|
-|vLLM            | 6090.73 tok/s | 28.80   |  185589          |
-|mini-vllm       | 5004.99 tok/s | 35.45   |  177421          |
+| Model          |Engine          | Tokens/s      | Time(s) | Generated Tokens |
+|:---------------|:---------------|:--------------|:--------|:-----------------|
+| Qwen3-0.6B     |vLLM            | 6090.73 tok/s | 28.80   |  185589          |
+|                |mini-vllm       | 5004.99 tok/s | 35.45   |  177421          |
+| gemma-3-1b-it  |vLLM            | 5224.05 tok/s | 45.00   |  235088          |
+|                |mini-vllm       | 4636.50 tok/s | 52.89   |  245243          |
 
 ## Features
 

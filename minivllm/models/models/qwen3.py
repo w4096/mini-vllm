@@ -9,12 +9,26 @@ from minivllm.models.layers.attention import FlashAttention
 from minivllm.executor.context import Context
 
 
+class Qwen3RMSNorm(nn.Module):
+    def __init__(self, hidden_size, eps: float = 1e-6) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(hidden_size))
+        self.variance_epsilon = eps
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        input_dtype = x.dtype
+        x = x.to(torch.float32)
+        variance = x.pow(2).mean(-1, keepdim=True)
+        x = x * torch.rsqrt(variance + self.variance_epsilon)
+        return self.weight * x.to(input_dtype)
+
+
 class Qwen3Attention(nn.Module):
 
-    def __init__(self, config: Qwen3Config) -> None:
+    def __init__(self, config: Qwen3Config, rotary_embedding: RotaryEmbedding) -> None:
         super().__init__()
         self.config = config
-
+        self.rotary_embedding = rotary_embedding
         self.scaling = config.head_dim ** -0.5
 
         self.q_dim = config.num_attention_heads * config.head_dim
@@ -47,19 +61,13 @@ class Qwen3Attention(nn.Module):
             config.num_attention_heads * config.head_dim, config.hidden_size, bias=config.attention_bias
         )
 
-        self.rotary_embedding = RotaryEmbedding.get(
-            head_size=config.head_dim,
-            rotary_dim=config.head_dim,
-            max_position=config.max_position_embeddings,
-            rope_theta=config.rope_theta,
-        )
         self.q_norm = nn.RMSNorm(config.head_dim, eps=config.rms_norm_eps)
         self.k_norm = nn.RMSNorm(config.head_dim, eps=config.rms_norm_eps)
 
         self.attn = FlashAttention(
             num_heads=self.config.num_attention_heads,
             head_dim=self.config.head_dim,
-            scale=self.scaling,
+            scaling=self.scaling,
             num_kv_heads=self.config.num_key_value_heads,
         )
 
@@ -113,12 +121,12 @@ class MLP(nn.Module):
         return x
 
 
-class DecoderLayer(nn.Module):
+class Qwen3DecoderLayer(nn.Module):
 
-    def __init__(self, config: Qwen3Config) -> None:
+    def __init__(self, config: Qwen3Config, rotary_embedding: RotaryEmbedding) -> None:
         super().__init__()
 
-        self.self_attn = Qwen3Attention(config)
+        self.self_attn = Qwen3Attention(config, rotary_embedding=rotary_embedding)
         self.mlp = MLP(
             hidden_size=config.hidden_size,
             intermediate_size=config.intermediate_size,
@@ -155,8 +163,15 @@ class Qwen3Model(nn.Module):
     ) -> None:
         super().__init__()
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size)
+        
+        self.rotary_embedding = RotaryEmbedding(
+            rotary_dim=config.head_dim,
+            max_position_embeddings=config.max_position_embeddings,
+            rope_theta=config.rope_theta,
+        )
+        
         self.layers = nn.ModuleList([
-            DecoderLayer(config) for _ in range(config.num_hidden_layers)
+            Qwen3DecoderLayer(config, self.rotary_embedding) for _ in range(config.num_hidden_layers)
         ])
         self.norm = nn.RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 

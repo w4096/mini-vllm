@@ -12,7 +12,7 @@ class Scheduler:
     def __init__(self, config: Config):
         self.max_num_batched_seqs = config.max_num_batched_seqs
         self.max_num_batched_tokens = config.max_num_batched_tokens
-        self.eos = config.eos
+        self.eos_token_ids = config.eos_token_ids
 
         self.block_manager = KVCacheBlockManager(config.kv_cache_num_blocks, config.kv_cache_block_size)
         self.waiting: deque[Request] = deque()
@@ -105,7 +105,7 @@ class Scheduler:
         for req, token in zip(batch.requests, tokens):
             req.append_output_token(token)
 
-            eos_reached = token == self.eos
+            eos_reached = self.eos_token_ids and token in self.eos_token_ids
             max_len_reached = len(req.completion_tokens) >= req.sampling_params.max_tokens
             if  max_len_reached or (eos_reached and not req.sampling_params.ignore_eos):
                 req.state = Request.FINISHED

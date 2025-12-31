@@ -48,14 +48,22 @@ class FlashAttention(nn.Module):
         self,
         num_heads,
         head_dim,
-        scale,
+        scaling,
         num_kv_heads,
+        sliding_window = (-1, -1),
     ):
+        """
+        
+        window_size: (left, right). If not (-1, -1), implements sliding window local attention. 
+                     left and right indicate how many tokens to the left/right each query can attend to.
+        """
+        
         super().__init__()
         self.num_heads = num_heads
         self.head_dim = head_dim
-        self.scale = scale
+        self.scaling = scaling
         self.num_kv_heads = num_kv_heads
+        self.sliding_window = sliding_window
         
         self.k_cache = self.v_cache = torch.tensor([])
 
@@ -72,10 +80,12 @@ class FlashAttention(nn.Module):
             o = flash_attn_varlen_func(q, k, v,
                                        max_seqlen_q=ctx.max_seq_len_q, cu_seqlens_q=ctx.cu_seq_lens_q,
                                        max_seqlen_k=ctx.max_seq_len_k, cu_seqlens_k=ctx.cu_seq_lens_k,
-                                       softmax_scale=self.scale, causal=True, block_table=ctx.block_table)
+                                       softmax_scale=self.scaling, causal=True, block_table=ctx.block_table,
+                                       window_size=self.sliding_window)
         else:
             # decode
             o = flash_attn_with_kvcache(q.unsqueeze(1), k_cache, v_cache,
                                         cache_seqlens=ctx.context_lens, block_table=ctx.block_table,
-                                        softmax_scale=self.scale, causal=True)
+                                        softmax_scale=self.scaling, causal=True,
+                                        window_size=self.sliding_window)
         return o

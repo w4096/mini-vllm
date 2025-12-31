@@ -8,6 +8,8 @@ from minivllm.models import get_model_class
 def _initialize_model(config: Config) -> torch.nn.Module:
     architecture = config.hf_config.architectures[0]
     cls = get_model_class(architecture)
+    if cls is None:
+        raise ValueError(f"Model architecture {architecture} is not supported.")
     model = cls(config.hf_config)
     return model
 

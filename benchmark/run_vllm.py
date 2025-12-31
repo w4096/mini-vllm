@@ -12,7 +12,6 @@ def main():
     path = os.path.expanduser("~/huggingface/Qwen3-0.6B/")
     tokenizer = AutoTokenizer.from_pretrained(path)
     model = LLM(path,
-                dtype="float16",
                 gpu_memory_utilization=0.5,
                 max_model_len=1024,
                 tensor_parallel_size=1,

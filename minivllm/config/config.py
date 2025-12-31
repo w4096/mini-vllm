@@ -1,3 +1,4 @@
+from typing import Set
 from dataclasses import dataclass, field
 from transformers import AutoConfig, PretrainedConfig
 
@@ -26,9 +27,7 @@ class Config:
     max_num_batched_seqs: int = 512
 
     # the end of sequence token id
-    eos: int = -1
-
-
+    eos_token_ids: Set[int] = None
 
 
     # ================= kv cache config =================
@@ -48,5 +47,10 @@ class Config:
 
     def __post_init__(self):
         self.hf_config = AutoConfig.from_pretrained(self.model)
-        assert hasattr(self.hf_config, "eos_token_id")
-        self.eos = self.hf_config.eos_token_id
+        if self.eos_token_ids is None:
+            assert hasattr(self.hf_config, "eos_token_id")
+            eos_token_id = self.hf_config.eos_token_id
+            if isinstance(eos_token_id, int):
+                self.eos_token_ids = {eos_token_id}
+            else:
+                self.eos_token_ids = set(eos_token_id)

@@ -3,8 +3,9 @@ import importlib
 
 # Register new models here
 _VLLM_MODELS = [
-    # architecture       name     class name
-    ("Qwen3ForCausalLM", "qwen3", "Qwen3ForCausalLM"),
+    # architecture        name     class name
+    ("Qwen3ForCausalLM",  "qwen3", "Qwen3ForCausalLM"),
+    ("Gemma3ForCausalLM", "gemma3", "Gemma3ForCausalLM"),
 ]
 
 def get_model_class(architecture: str) -> type | None:
