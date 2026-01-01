@@ -58,8 +58,10 @@ class KVCacheBlockManager:
         prefix_cache_miss = False
         required_blocks = utils.cdiv(len(req.tokens), self.block_size)
         for i in range(required_blocks):
+            # get tokens for the current block
             tokens = req.tokens[i * self.block_size: (i + 1) * self.block_size]
 
+            # only if the block is full, we can compute its hash and check cache hit/miss
             if len(tokens) == self.block_size:
                 hash_ = KVCacheBlock.compute_hash(tokens, hash_)
                 bid = self.hash_to_block_id.get(hash_, -1)
@@ -148,7 +150,7 @@ class KVCacheBlockManager:
             tokens = req.tokens[-self.block_size:]
             if len(req.blocks) > 1:
                 prefix = self.block_table[req.blocks[-2]].hash
-            else:   
+            else:
                 prefix = -1
             h = KVCacheBlock.compute_hash(tokens, prefix)
             last_block.update(h, tokens)

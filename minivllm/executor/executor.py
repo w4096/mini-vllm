@@ -7,7 +7,7 @@ from minivllm.executor.context import Context
 from minivllm.models.loader import load_model
 from minivllm.scheduler.batch import Batch
 from minivllm.models.layers.sampler import Sampler
-from minivllm.executor.graph import CUDAGraphExecutor
+from minivllm.executor.graph import CudaGraphRunner
 
 class Executor:
     def __init__(self, config: Config):
@@ -24,8 +24,8 @@ class Executor:
         
         if config.use_cuda_graph:
             logging.info("Initializing CUDA graph executor...")
-            self.graph_executor = CUDAGraphExecutor(self.model, self.config, self.config.max_num_batched_seqs)
-            self.graph_executor.capture()
+            self.graph_runner = CudaGraphRunner(self.model, self.config, self.config.max_num_batched_seqs)
+            self.graph_runner.capture()
 
         
     def _init_kv_cache(self):
@@ -178,8 +178,8 @@ class Executor:
         return logits
 
     def decode(self, ctx: Context, input_ids: torch.Tensor) -> list[int]:
-        if self.config.use_cuda_graph and self.graph_executor.max_batch_size >= input_ids.size(0):
-            logits = self.graph_executor.replay(ctx, input_ids)
+        if self.config.use_cuda_graph and self.graph_runner.max_batch_size >= input_ids.size(0):
+            logits = self.graph_runner.replay(ctx, input_ids)
         else:
             logits = self.model(ctx, input_ids, ctx.positions)
         return logits

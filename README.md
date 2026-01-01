@@ -29,6 +29,43 @@ Run inference:
 $ python run.py
 ```
 
+## Interactive Chat
+
+Start an interactive chat session in your console:
+
+```sh
+$ python chat.py --model ~/huggingface/Qwen3-0.6B
+```
+
+### Chat Example
+
+```
+You: Hello! What can you help me with?
+Assistant: Hello there! I’m here to help in as many ways as I can. 😊 
+
+Tell me, what’s on your mind? Do you want to:
+
+*   **Answer a question?** (About pretty much anything!)
+*   **Brainstorm ideas?** (For a story,
+You: Tell me a joke
+Assistant: Why don’t scientists trust atoms? 
+
+Because they make up everything! 😄
+
+Let me know if you'd like to hear another one!
+You: I can't understand it
+Assistant: Okay, no worries! Let's try a simpler one. 
+
+What do you call a fish with no eyes?
+
+… Fsh! 
+
+Hope that was easier! 😊  If you’d like to hear another one, just ask!
+You: /exit
+
+Goodbye! 👋
+```
+
 ## Supported Models
 
 Currently supported models:

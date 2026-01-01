@@ -4,7 +4,7 @@ from minivllm.config.config import Config
 from minivllm.executor.context import Context
 
 
-class CUDAGraphExecutor:
+class CudaGraphRunner:
     def __init__(self, model, config: Config, max_batch_size: int):
         self.model = model
         self.config = config

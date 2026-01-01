@@ -1,3 +1,4 @@
+import os
 from typing import Set
 from dataclasses import dataclass, field
 from transformers import AutoConfig, PretrainedConfig
@@ -7,7 +8,7 @@ class Config:
     # ================= model config =================
 
     # the model name or path
-    model: str = "Qwen/Qwen3-0.6B"
+    model: str = "~/huggingface/Qwen3-0.6B"
 
     # the huggingface config of the model
     hf_config: PretrainedConfig = field(init=False)
@@ -54,3 +55,5 @@ class Config:
                 self.eos_token_ids = {eos_token_id}
             else:
                 self.eos_token_ids = set(eos_token_id)
+                
+        assert os.path.isdir(self.model), f"Model path {self.model} is not a directory."
