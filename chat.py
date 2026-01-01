@@ -1,5 +1,5 @@
 import argparse
-from typing import List
+from typing import Generator, Tuple, List
 
 from minivllm.config.config import Config
 from minivllm.config.sampling import SamplingParams
@@ -116,6 +116,26 @@ Type /exit to exit.
         print(f"\nCurrent Settings:")
         print(f"Max Tokens: {self.sampling_params.max_tokens}")
 
+
+    def generate(
+        self,
+        prompt: list[int],
+        sampling_params: SamplingParams,
+    ) -> Generator[Tuple[int, str, bool], None, None]:
+ 
+        req = self.engine.submit(prompt, sampling_params)
+        num_tokens = req.prompt_token_count
+
+        while not req.finished:
+            self.engine.step()
+
+            try:
+                tokens = req.tokens[num_tokens:]
+                text = self.engine.tokenizer.decode(tokens, skip_special_tokens=True)
+                num_tokens = len(req.tokens)
+                yield text
+            except Exception as e:
+                pass
         
     def start(self):
         self.print_welcome()
@@ -147,7 +167,7 @@ Type /exit to exit.
                 # Generate response
                 print("Assistant: ", end="", flush=True)
                 response = ""
-                for text in self.engine.stream_generate(tokens, self.sampling_params):
+                for text in self.generate(tokens, self.sampling_params):
                     print(text, end="", flush=True)
                     response += text
                 print("\n")

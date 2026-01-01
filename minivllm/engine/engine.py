@@ -1,6 +1,5 @@
 from time import perf_counter
 import logging
-from typing import Generator, Tuple
 from tqdm.auto import tqdm
 from transformers.models.auto.tokenization_auto import AutoTokenizer
 
@@ -90,23 +89,3 @@ class Engine:
 
         return outputs
 
-
-    def stream_generate(
-        self,
-        prompt: list[int],
-        sampling_params: SamplingParams,
-    ) -> Generator[Tuple[int, str, bool], None, None]:
- 
-        req = self.submit(prompt, sampling_params)
-        num_tokens = req.prompt_token_count
-
-        while not req.finished:
-            self.step()
-
-            try:
-                tokens = req.tokens[num_tokens:]
-                text = self.tokenizer.decode(tokens, skip_special_tokens=True)
-                num_tokens = len(req.tokens)
-                yield text
-            except Exception as e:
-                pass
