@@ -150,11 +150,11 @@ Type /exit to exit.
                 for text in self.engine.stream_generate(tokens, self.sampling_params):
                     print(text, end="", flush=True)
                     response += text
-                print()
+                print("\n")
+                print("=" * 80 + "\n")
 
                 self.history.append({"role": "user", "content": user_input})
                 self.history.append({"role": "assistant", "content": response.strip()})
-
             
             except KeyboardInterrupt:
                 print("\n\nGoodbye! 👋\n")
@@ -181,7 +181,6 @@ def main():
     )
     engine = Engine(config)
     print("Model loaded successfully!\n")
-    
     
     # Initialize chat session
     session = ChatSession(engine, system_prompt=args.system_prompt)

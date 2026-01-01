@@ -37,7 +37,7 @@ Start an interactive chat session in your console:
 $ python chat.py --model ~/huggingface/Qwen3-0.6B
 ```
 
-### Chat Example
+Here is an example session:
 
 ```
 You: Hello! What can you help me with?
