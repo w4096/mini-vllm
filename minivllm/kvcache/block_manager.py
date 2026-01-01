@@ -56,14 +56,14 @@ class KVCacheBlockManager:
 
         hash_ = -1
         prefix_cache_miss = False
-        required_blocks = utils.cdiv(len(req.tokens), self.block_size)
-        for i in range(required_blocks):
+        for i in range(0, len(req.tokens), self.block_size):
             # get tokens for the current block
-            tokens = req.tokens[i * self.block_size: (i + 1) * self.block_size]
+            tokens = req.tokens[i: i + self.block_size]
 
-            # only if the block is full, we can compute its hash and check cache hit/miss
+            # only full block can be cached
             if len(tokens) == self.block_size:
                 hash_ = KVCacheBlock.compute_hash(tokens, hash_)
+                
                 bid = self.hash_to_block_id.get(hash_, -1)
                 if bid == -1 or self.block_table[bid].tokens != tokens:
                     prefix_cache_miss = True
