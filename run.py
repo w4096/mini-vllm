@@ -33,7 +33,7 @@ def main():
         model=path,
     )
     engine = Engine(config)
-    sampling_params = SamplingParams(temperature=1.0, max_tokens=1024)
+    sampling_params = SamplingParams(max_tokens=1024)
     outputs = engine.generate(prompts, sampling_params)
 
     for output in outputs:

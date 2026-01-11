@@ -25,7 +25,6 @@ class ChatSession:
             enable_thinking=True
         )
         
-        
     def run_command(self, command: str, args: List[str]):
         """Run a special command"""
         if command == "/help":
@@ -59,6 +58,42 @@ class ChatSession:
             print(f"\n[Max tokens set to {self.sampling_params.max_tokens}]\n")
             return
         
+        if command == "/top-k":
+            if len(args) != 1 or not args[0].isdigit():
+                print("\n[Usage: /top-k <num>]\n")
+                return
+            self.sampling_params.top_k = int(args[0])
+            print(f"\n[Top-k set to {self.sampling_params.top_k}]\n")
+            return
+        
+        if command == "/top-p":
+            if len(args) != 1:
+                print("\n[Usage: /top-p <float>]\n")
+                return
+            try:
+                value = float(args[0])
+                self.sampling_params.top_p = value
+                print(f"\n[Top-p set to {self.sampling_params.top_p}]\n")
+            except ValueError:
+                print("\n[Usage: /top-p <float>]\n")
+            return
+        
+        if command == "/temperature":
+            if len(args) != 1:
+                print("\n[Usage: /temperature <float>]\n")
+                return
+            try:
+                value = float(args[0])
+                self.sampling_params.temperature = value
+                print(f"\n[Temperature set to {self.sampling_params.temperature}]\n")
+            except ValueError:
+                print("\n[Usage: /temperature <float>]\n")
+            return
+        
+        if command == "/settings":
+            self.print_settings()
+            return
+        
         print(f"\n[Unknown command: {command}. Type /help for available commands]\n")
 
 
@@ -73,8 +108,12 @@ Commands:
 /history  - Show conversation history
 
 Settings:
-/maxtokens <num>  - Set max tokens for response
-/system <text>    - Set system prompt
+/settings             - Show current settings
+/maxtokens <num>      - Set max tokens for response
+/top-k <num>          - Set top-k sampling value
+/top-p <float>        - Set top-p sampling value
+/temperature <float>  - Set temperature for sampling
+/system <text>        - Set system prompt
 """
         print(help_text)
 
@@ -115,6 +154,10 @@ Type /exit to exit.
         """Print current settings"""
         print(f"\nCurrent Settings:")
         print(f"Max Tokens: {self.sampling_params.max_tokens}")
+        print(f"Top-k: {self.sampling_params.top_k}")
+        print(f"Top-p: {self.sampling_params.top_p}")
+        print(f"Temperature: {self.sampling_params.temperature}\n")
+        print(f"System Prompt: {self.system_prompt}\n")
 
 
     def generate(

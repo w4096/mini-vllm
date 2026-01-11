@@ -19,9 +19,6 @@ class Scheduler:
         self.running: deque[Request] = deque()
 
 
-    def set_block_manager(self, block_manager: KVCacheBlockManager):
-        self.block_manager = block_manager
-
     @property
     def finished(self):
         return not self.waiting and not self.running

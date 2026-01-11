@@ -169,9 +169,37 @@ class Executor:
         temperatures = torch.tensor(temperatures, dtype=torch.float32, pin_memory=True).cuda(non_blocking=True)
         return temperatures
     
-    def sample(self, logits: torch.Tensor, temperatures: torch.Tensor|None):
-        return self.sampler(logits, temperatures).tolist()
-
+    def _build_sample_input(self, requests: list[Request]) -> tuple[torch.Tensor, torch.Tensor|None, torch.Tensor|None]:
+        temperatures = []
+        top_ks = []
+        top_ps = []
+        top_p_k_needed = False
+        temperatures_needed = False
+        for req in requests:
+            temperatures.append(req.sampling_params.temperature)
+            top_ks.append(req.sampling_params.top_k)
+            top_ps.append(req.sampling_params.top_p)
+            if req.sampling_params.top_k > 0 or req.sampling_params.top_p < 1.0:
+                top_p_k_needed = True
+            if req.sampling_params.temperature != 1.0:
+                temperatures_needed = True
+        
+        top_ks_tensor = None
+        top_ps_tensor = None
+        temperatures_tensor = None
+        
+        if top_p_k_needed:
+            top_ks_tensor = torch.tensor(top_ks, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
+            top_ps_tensor = torch.tensor(top_ps, dtype=torch.float32, pin_memory=True).cuda(non_blocking=True)
+            
+        if temperatures_needed:
+            temperatures_tensor = torch.tensor(temperatures, dtype=torch.float32, pin_memory=True).cuda(non_blocking=True)
+    
+        return temperatures_tensor, top_ks_tensor, top_ps_tensor
+    
+    def sample(self, logits: torch.Tensor, batch: Batch) -> list[int]:
+        temperatures, top_k, top_p = self._build_sample_input(batch.requests)
+        return self.sampler(logits, temperatures, top_k, top_p).tolist()
 
     def prefill(self, ctx: Context, input_ids: torch.Tensor) -> torch.Tensor:
         logits = self.model(ctx, input_ids, ctx.positions)
@@ -199,9 +227,7 @@ class Executor:
         else:
             input_ids, ctx = self._build_decode_input(batch.requests)
 
-        temperatures = self._build_sample_input(batch.requests)
-
         logits = self.forward(ctx, input_ids)
-        output_tokens = self.sample(logits, temperatures)
+        output_tokens = self.sample(logits, batch)
         return output_tokens
     
