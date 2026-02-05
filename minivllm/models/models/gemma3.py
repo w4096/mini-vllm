@@ -223,7 +223,7 @@ class Gemma3TextModel(nn.Module):
             ctx,
             x: torch.Tensor,
             positions: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> torch.Tensor:
         x = self.embed_tokens(x)
         
         for layer in self.layers:
@@ -256,7 +256,7 @@ class Gemma3ForCausalLM(nn.Module):
     ) -> torch.Tensor:
         hidden_states = self.model(ctx, input_ids, positions)
         if ctx.prefill:
-            last_indices = ctx.cu_seq_lens_q[1:] - 1
+            last_indices = ctx.cu_seqlens_q[1:] - 1
             hidden_states = hidden_states[last_indices]
 
         logits = self.lm_head(hidden_states)

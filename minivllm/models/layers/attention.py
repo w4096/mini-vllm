@@ -75,11 +75,14 @@ class FlashAttention(nn.Module):
             store_kvcache(k, v, k_cache, v_cache, ctx.slot_mapping)
             
         if ctx.prefill:
-            if ctx.block_table is not None:    # prefix cache
+            # if ctx.block_table is not None, this means we are using prefix caching,
+            # in this situation, we need to provide the full k_cache and v_cache and
+            # the block_table to flash attention
+            if ctx.block_table is not None:
                 k, v = k_cache, v_cache
             o = flash_attn_varlen_func(q, k, v,
-                                       max_seqlen_q=ctx.max_seq_len_q, cu_seqlens_q=ctx.cu_seq_lens_q,
-                                       max_seqlen_k=ctx.max_seq_len_k, cu_seqlens_k=ctx.cu_seq_lens_k,
+                                       max_seqlen_q=ctx.max_seqlen_q, cu_seqlens_q=ctx.cu_seqlens_q,
+                                       max_seqlen_k=ctx.max_seqlen_k, cu_seqlens_k=ctx.cu_seqlens_k,
                                        softmax_scale=self.scaling, causal=True, block_table=ctx.block_table,
                                        window_size=self.sliding_window)
         else:

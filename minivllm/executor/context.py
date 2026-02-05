@@ -19,11 +19,11 @@ class Context:
     
     for seqeunce lengths: [L1, L2, L3], the cumulative sequence lengths is [0, L1, L1+L2, L1+L2+L3]
     """
-    cu_seq_lens_q: torch.Tensor | None = None
-    cu_seq_lens_k: torch.Tensor | None = None
+    cu_seqlens_q: torch.Tensor | None = None
+    cu_seqlens_k: torch.Tensor | None = None
 
-    max_seq_len_q: int = 0
-    max_seq_len_k: int = 0
+    max_seqlen_q: int = 0
+    max_seqlen_k: int = 0
 
 
     """
@@ -48,14 +48,8 @@ class Context:
 
     """
     mapping from token index to slot index in the cache
-    
-      
-    +-----------------+--------------------+
-    | 0 | 1 | 2 | ... | 32 | 33 | 34 | ... |   ...
-    +-----------------+--------------------+
-        block 0             block 1
-
-    Each token maps to a slot in the KV cache blocks.
+    the index is the token index in the continuous batching sequence
+    the value is the slot index in the kv cache
     """
     slot_mapping: torch.Tensor | None = None
 

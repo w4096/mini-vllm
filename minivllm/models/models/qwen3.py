@@ -213,7 +213,7 @@ class Qwen3ForCausalLM(nn.Module):
 
         # at prefill stage, we only need the last token of each sequence
         if ctx.prefill:
-            last_indices = ctx.cu_seq_lens_q[1:] - 1
+            last_indices = ctx.cu_seqlens_q[1:] - 1
             hidden_states = hidden_states[last_indices].contiguous()
 
         logits = self.lm_head(hidden_states)

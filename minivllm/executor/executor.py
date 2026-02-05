@@ -82,10 +82,10 @@ class Executor:
         input_ids = []
         positions = []
         slot_mapping = []
-        cu_seq_lens_q = [0]
-        cu_seq_lens_k = [0]
-        max_seq_len_q = 0
-        max_seq_len_k = 0
+        cu_seqlens_q = [0]
+        cu_seqlens_k = [0]
+        max_seqlen_q = 0
+        max_seqlen_k = 0
         block_table = None
 
         for req in requests:
@@ -95,10 +95,10 @@ class Executor:
             
             seqlen_q = seqlen - req.num_cached_tokens
             seqlen_k = seqlen
-            cu_seq_lens_q.append(cu_seq_lens_q[-1] + seqlen_q)
-            cu_seq_lens_k.append(cu_seq_lens_k[-1] + seqlen_k)
-            max_seq_len_q = max(max_seq_len_q, seqlen_q)
-            max_seq_len_k = max(max_seq_len_k, seqlen_k)
+            cu_seqlens_q.append(cu_seqlens_q[-1] + seqlen_q)
+            cu_seqlens_k.append(cu_seqlens_k[-1] + seqlen_k)
+            max_seqlen_q = max(max_seqlen_q, seqlen_q)
+            max_seqlen_k = max(max_seqlen_k, seqlen_k)
 
             num_cached_blocks = req.num_cached_tokens // self.config.kv_cache_block_size
             for i in range(num_cached_blocks, len(req.blocks)):
@@ -110,18 +110,18 @@ class Executor:
                     end = start + last_block_tokens
                 slot_mapping.extend(list(range(start, end)))
                 
-        if cu_seq_lens_k[-1] > cu_seq_lens_q[-1]:
+        if cu_seqlens_k[-1] > cu_seqlens_q[-1]:
             block_table = self._build_block_table(requests)
 
         input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         ctx = Context(
             prefill=True,
             positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True),
-            cu_seq_lens_q = torch.tensor(cu_seq_lens_q, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True),
-            cu_seq_lens_k = torch.tensor(cu_seq_lens_k, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True),
+            cu_seqlens_q = torch.tensor(cu_seqlens_q, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True),
+            cu_seqlens_k = torch.tensor(cu_seqlens_k, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True),
             slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True),
-            max_seq_len_q = max_seq_len_q,
-            max_seq_len_k = max_seq_len_k,
+            max_seqlen_q = max_seqlen_q,
+            max_seqlen_k = max_seqlen_k,
             block_table = block_table
         )
         return input_ids, ctx
@@ -162,14 +162,7 @@ class Executor:
         ]
         return torch.tensor(block_table, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
 
-    def _build_sample_input(self, requests: list[Request]) -> torch.Tensor:
-        temperatures = []
-        for req in requests:
-            temperatures.append(req.sampling_params.temperature)
-        temperatures = torch.tensor(temperatures, dtype=torch.float32, pin_memory=True).cuda(non_blocking=True)
-        return temperatures
-    
-    def _build_sample_input(self, requests: list[Request]) -> tuple[torch.Tensor, torch.Tensor|None, torch.Tensor|None]:
+    def _build_sample_input(self, requests: list[Request]) -> tuple[torch.Tensor|None, torch.Tensor|None, torch.Tensor|None]:
         temperatures = []
         top_ks = []
         top_ps = []
@@ -205,7 +198,7 @@ class Executor:
         logits = self.model(ctx, input_ids, ctx.positions)
         return logits
 
-    def decode(self, ctx: Context, input_ids: torch.Tensor) -> list[int]:
+    def decode(self, ctx: Context, input_ids: torch.Tensor) -> torch.Tensor:
         if self.config.use_cuda_graph and self.graph_runner.max_batch_size >= input_ids.size(0):
             logits = self.graph_runner.replay(ctx, input_ids)
         else:
