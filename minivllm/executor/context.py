@@ -56,10 +56,13 @@ class Context:
 
 
     """
-    The context length of each token (only for decode)
-    The context length is the length of the prefix of the token that is used to compute the attention.
+    The sequence lengths of the kv cache for each request.
+    For example, if we have 2 requests:
+    req 0 has kv cache sequence length of 4
+    req 1 has kv cache sequence length of 3
+    then the cache_seqlens is [4, 3]
     """
-    context_lens: torch.Tensor | None = None
+    cache_seqlens: torch.Tensor | None = None
 
 
     """

@@ -88,7 +88,7 @@ class FlashAttention(nn.Module):
         else:
             # decode
             o = flash_attn_with_kvcache(q.unsqueeze(1), k_cache, v_cache,
-                                        cache_seqlens=ctx.context_lens, block_table=ctx.block_table,
+                                        cache_seqlens=ctx.cache_seqlens, block_table=ctx.block_table,
                                         softmax_scale=self.scaling, causal=True,
                                         window_size=self.sliding_window)
         return o

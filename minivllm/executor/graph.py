@@ -16,7 +16,7 @@ class CudaGraphRunner:
         self.input_ids = torch.zeros(self.max_batch_size, dtype=torch.int64, device='cuda')
         self.positions = torch.zeros(self.max_batch_size, dtype=torch.int64, device='cuda')
         self.slot_mapping = torch.zeros(self.max_batch_size, dtype=torch.int32, device='cuda')
-        self.context_lens = torch.zeros(self.max_batch_size, dtype=torch.int32, device='cuda')
+        self.cache_seqlens = torch.zeros(self.max_batch_size, dtype=torch.int32, device='cuda')
         self.block_table = torch.zeros((self.max_batch_size, config.kv_cache_num_blocks), dtype=torch.int32, device='cuda')
         self.outputs = torch.zeros(self.max_batch_size, config.hf_config.vocab_size, device='cuda')
 
@@ -39,7 +39,7 @@ class CudaGraphRunner:
             prefill=False,
             positions=self.positions[:batch_size],
             slot_mapping=self.slot_mapping[:batch_size],
-            context_lens=self.context_lens[:batch_size],
+            cache_seqlens=self.cache_seqlens[:batch_size],
             block_table=self.block_table[:batch_size],
         )
 
@@ -65,8 +65,8 @@ class CudaGraphRunner:
         self.positions[:bs] = ctx.positions
         self.slot_mapping.fill_(-1)
         self.slot_mapping[:bs] = ctx.slot_mapping
-        self.context_lens.zero_()
-        self.context_lens[:bs] = ctx.context_lens
+        self.cache_seqlens.zero_()
+        self.cache_seqlens[:bs] = ctx.cache_seqlens
         self.block_table[:bs, :ctx.block_table.size(1)] = ctx.block_table
         graph.replay()
         return self.outputs[:bs]

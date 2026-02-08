@@ -131,12 +131,12 @@ class Executor:
         input_ids = []
         positions = []
         slot_mapping = []
-        context_lens = []
+        cache_seqlens = []
 
         for req in requests:
             input_ids.append(req.tokens[-1])
             positions.append(len(req.tokens) - 1)
-            context_lens.append(len(req.tokens))
+            cache_seqlens.append(len(req.tokens))
 
             slot_base_index = req.blocks[-1] * self.config.kv_cache_block_size
             last_block_tokens = len(req.tokens) - (len(req.blocks) - 1) * self.config.kv_cache_block_size
@@ -147,7 +147,7 @@ class Executor:
             prefill=False,
             positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True),
             slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True),
-            context_lens = torch.tensor(context_lens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True),
+            cache_seqlens = torch.tensor(cache_seqlens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True),
             block_table = self._build_block_table(requests),
         )
         return input_ids, ctx
