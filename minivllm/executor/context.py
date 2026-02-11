@@ -68,14 +68,14 @@ class Context:
     """
     The block table is a 2D tensor that maps each request to its corresponding block in the cache.
     
-    For example, req 0 uses blocks 0, 1, ..., n
-                 req 1 uses blocks 0, 1, ..., m
+    For example, req 0 uses blocks 0, 1, 2, 3
+                 req 1 uses blocks 4, 5, 6
 
     The block table is:
     
     [
-        [0, 1, ..., n-1,   n],  # req 0
-        [0, 1, ..., m,    -1],  # req 1
+        [0, 1, 2, 3 ],  # req 0
+        [4, 5, 6, -1],  # req 1
     ]
     """
     block_table: torch.Tensor | None = None

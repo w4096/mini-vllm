@@ -6,12 +6,14 @@ The main purpose of this project is to help me understand how LLM inference engi
 
 ## Quick Start
 
-Download a model from Huggingface.
+**Download a model from Huggingface**
 
 ```sh
 # download model
 $ hf download Qwen/Qwen3-0.6B
 ```
+
+**Install mini-vllm**
 
 Clone this repo and install dependencies:
 
@@ -21,12 +23,26 @@ $ cd mini-vllm
 $ pip install -r requirements.txt
 ```
 
-_If you are running into trouble installing `flash-attention`, you can try the prebuilt wheels. See: [mjun0812/flash-attention-prebuild-wheels](https://github.com/mjun0812/flash-attention-prebuild-wheels)_
+The attention implementation in this project is [mini-flash-attention](https://github.com/w4096/mini-flash-attention.git), which is a simplified version of flash attention I implemented with only the features used in this project. It is not published on PyPI, so you can install it with the following command:
 
-Run inference:
+```sh
+$ pip install --no-build-isolation git+https://github.com/w4096/mini-flash-attention.git
+```
+
+If you want use flash attention, you can install it, and import `flash_atten` instead of `mini_flash_attention` in `minivllm/models/layers/attention.py`.
+
+**Run inference**
+
+You can run the inference with the following command:
 
 ```sh
 $ python run.py
+```
+
+run benchmark:
+
+```sh
+$ python benchmark/run_mini_vllm.py
 ```
 
 ## Interactive Chat

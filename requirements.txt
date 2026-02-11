@@ -2,5 +2,6 @@ transformers==4.57.3
 triton==3.5.1
 xxhash==3.6.0
 tqdm==4.67.1
-flash_attn==2.8.3
+# flash_attn==2.8.3
 torch==2.9.1+cu130
+git+https://github.com/w4096/mini-flash-attention.git

@@ -9,7 +9,7 @@ from minivllm.config.config import Config
 logging.basicConfig(format='%(asctime)s: %(message)s', level=logging.INFO, datefmt='%m-%d-%Y %H:%M:%S')
 
 def main():
-    path = os.path.expanduser("~/code/gemma-3-1b-it")
+    path = os.path.expanduser("~/huggingface/Qwen3-0.6B/")
     
     tokenizer = AutoTokenizer.from_pretrained(path)
 

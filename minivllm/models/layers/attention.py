@@ -3,7 +3,8 @@ from torch import nn
 import triton
 import triton.language as tl
 
-from flash_attn import flash_attn_varlen_func, flash_attn_with_kvcache
+# from flash_attn import flash_attn_varlen_func, flash_attn_with_kvcache
+from mini_flash_attention import flash_attn_with_kvcache, flash_attn_varlen_func
 from minivllm.executor.context import Context
 
 
@@ -83,12 +84,9 @@ class FlashAttention(nn.Module):
             o = flash_attn_varlen_func(q, k, v,
                                        max_seqlen_q=ctx.max_seqlen_q, cu_seqlens_q=ctx.cu_seqlens_q,
                                        max_seqlen_k=ctx.max_seqlen_k, cu_seqlens_k=ctx.cu_seqlens_k,
-                                       softmax_scale=self.scaling, causal=True, block_table=ctx.block_table,
-                                       window_size=self.sliding_window)
+                                       causal=True)
         else:
             # decode
             o = flash_attn_with_kvcache(q.unsqueeze(1), k_cache, v_cache,
-                                        cache_seqlens=ctx.cache_seqlens, block_table=ctx.block_table,
-                                        softmax_scale=self.scaling, causal=True,
-                                        window_size=self.sliding_window)
+                                        cache_seqlens=ctx.cache_seqlens, block_table=ctx.block_table)
         return o

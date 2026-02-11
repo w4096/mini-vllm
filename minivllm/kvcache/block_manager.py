@@ -31,7 +31,7 @@ class KVCacheBlock:
 
 
 class KVCacheBlockManager:
-    def __init__(self, capacity: int, block_size: int):
+    def __init__(self, capacity: int, block_size: int, support_prefix_cache=False):
         """
         :param capacity: The number of KVCacheBlocks
         :param block_size: The number of slots in each KVCacheBlock.
@@ -49,6 +49,7 @@ class KVCacheBlockManager:
         self.free_block_ids: deque[int] = deque(range(capacity))
         self.used_block_ids: set[int] = set()
         self.hash_to_block_id: dict[int, int] = {}
+        self.support_prefix_cache = support_prefix_cache
 
     def allocate_blocks_for_prefill(self, req: Request):
         assert req.state == Request.WAITING
@@ -61,7 +62,7 @@ class KVCacheBlockManager:
             tokens = req.tokens[i: i + self.block_size]
 
             # only full block can be cached
-            if len(tokens) == self.block_size:
+            if len(tokens) == self.block_size and self.support_prefix_cache:
                 hash_ = KVCacheBlock.compute_hash(tokens, hash_)
                 
                 bid = self.hash_to_block_id.get(hash_, -1)
